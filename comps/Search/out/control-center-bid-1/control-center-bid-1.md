@@ -1,0 +1,244 @@
+#### **BID SUBMISSION**
+
+### **To:**
+
+General Manager – Corporate Strategy Bharat Petroleum Corporation Limited Corporate Strategy & Business Development Bharat Bhavan III, Walchand Hirachand Marg, Ballard Estate – Mumbai 400 001
+
+## **From:**
+
+### **Innovate Integration Solutions Pvt. Ltd.**
+
+Regd. Office: Tech Tower One, 15th Floor, Cyber City, Gurugram, Haryana - 122002 Contact: Priya Sharma, Director - Strategic Bids Email: [priya.sharma@innovate-is.com](mailto:priya.sharma@innovate-is.com) Phone: +91 98765 43210
+
+## **Subject: Bid for Tender No: 73448, CRFQ No: 1000352329 – Selection of Bidder for Implementation of the Command & Control Centre**
+
+**Date:** June 11, 2020
+
+Dear Mr. Rahul Tandon,
+
+Innovate Integration Solutions Pvt. Ltd. is pleased to submit its comprehensive proposal in response to the Tender for the Implementation of the Command & Control Centre (C&C) as part of BPCL's Digital Initiatives.
+
+As a leading System Integrator with extensive experience in deploying large-scale, mission-critical command and control platforms for clients in the energy, utility, and industrial sectors, we are confident in our ability to deliver a robust, scalable, and secure solution that meets and exceeds BPCL's strategic objectives.
+
+Our proposal is submitted in three parts as stipulated in the tender document:
+
+- 1. **Part 1: Techno-Commercial Bid**
+- 2. **Part 2: Quality Bid**
+- 3. **Part 3: Price Bid**
+
+We have meticulously studied the Terms of Reference (ToR) and all associated annexures. Our proposed solution, powered by our proprietary 'Unity' Integrated Command Platform, is designed to seamlessly integrate with BPCL's existing and future systems across the Retail, LPG, and I&C business units. It will provide the required
+
+bidirectional control, advanced analytics, and workflow automation to enhance operational efficiency, safety, and compliance.
+
+We confirm that we have submitted the Earnest Money Deposit (EMD) of Rs. 10 lakhs and have digitally signed and uploaded the Integrity Pact (IP) and all other required pro formas via the https://bpcleproc.in portal.
+
+We look forward to the opportunity to demonstrate our capabilities and partner with BPCL on this transformative digital initiative.
+
+Sincerely,
+
+### **Priya Sharma**
+
+Director, Strategic Bids Innovate Integration Solutions Pvt. Ltd. (Digitally Signed)
+
+## **Part 1: Techno-Commercial Bid**
+
+## **1. Bidder Profile**
+
+- **Company Name:** Innovate Integration Solutions Pvt. Ltd.
+- **Year of Incorporation:** 2005
+- **Core Business:** System Integration, Enterprise Software Solutions, IoT & Automation, and Managed Services for large enterprises.
+- **Head Office:** Gurugram, Haryana
+- **Presence:** Offices in Mumbai, Bengaluru, Chennai, and Kolkata.
+
+## **2. Response to Bid Qualification Criterion (BQC) (Ref: Annexure 1, Section 1.2.1)**
+
+Our compliance with the BQC is detailed below. All supporting documents have been uploaded to the e-procurement portal.
+
+| BQC Criteria (as per Tender     | Innovate Integration             | Supporting Documents     |  |
+|---------------------------------|----------------------------------|--------------------------|--|
+| Doc)                            | Solutions' Compliance            | Uploaded                 |  |
+|                                 | We have successfully             |                          |  |
+|                                 | implemented three major          |                          |  |
+|                                 | C&C/SCADA integration            |                          |  |
+|                                 | projects in the last 5 years,    |                          |  |
+|                                 | each with a value exceeding      |                          |  |
+|                                 | Rs. 1.5 Cr. Our proposed 'Unity' |                          |  |
+|                                 | platform was implemented in      | Annexure 11, Annexure 12 |  |
+| a.<br>Proven<br>Track<br>Record | the PowerGrid Utility project.   | (TPIA Certified)         |  |
+
+|                                       | i.<br>Turnover:<br>Our average                                 |                              |  |
+|---------------------------------------|----------------------------------------------------------------|------------------------------|--|
+|                                       | annual financial turnover for                                  |                              |  |
+|                                       | the last three consecutive                                     |                              |  |
+|                                       | accounting years (FY 2017-18,                                  |                              |  |
+|                                       | 2018-19, 2019-20) is<br>Rs.<br>22.5                            |                              |  |
+|                                       | Crores.                                                        |                              |  |
+|                                       | ii.<br>Net<br>Worth:<br>Our net worth                          |                              |  |
+|                                       | as per the latest audited                                      | Audited Balance Sheets and   |  |
+|                                       | financial statement<br>(FY 2019-                               | P&L Accounts for FY 2017-18, |  |
+| b.<br>Financial<br>Capacity           | 20) is positive.                                               | 2018-19, 2019-20.            |  |
+|                                       | We are a<br>CMMI<br>for<br>Services                            |                              |  |
+|                                       | Level<br>5<br>appraised                                        | Self-attested copy of valid  |  |
+| c.<br>Maturity<br>on<br>Services      | organization.                                                  | CMMI Level 5 certificate.    |  |
+|                                       | Our 'Unity' platform has been                                  |                              |  |
+|                                       | deployed for our client,                                       |                              |  |
+|                                       | National Energy Corp,                                          |                              |  |
+|                                       | integrating: 1) IoT (CCTV), 2)                                 |                              |  |
+| d.<br>Credentials<br>of<br>Technology | SCADA, 3) ERP workflow, and<br>OEM Declaration as per          |                              |  |
+| Platform                              | 5) Data Lake.                                                  | Annexure 13.                 |  |
+|                                       | Our partners for VA (VisionAI                                  |                              |  |
+|                                       | Ltd.) and Communication                                        |                              |  |
+|                                       | Systems (ConnectComms Inc.)<br>Online declaration with partner |                              |  |
+| e.<br>Communication<br>System<br>/    | have authorized presence and                                   | details (Name, Address,      |  |
+| VA<br>Capabilities                    | service centers in India.                                      | Contact).                    |  |
+
+### **3. Response to Technical Requirements (Ref: Annexure 1, Section 1.2.2)**
+
+Our proposed 'Unity' C&C Platform complies with all minimum technical requirements.
+
+| Platform Capability                            | Compliance Status |
+|------------------------------------------------|-------------------|
+| 1. Bi-directional control of field devices     | Compliant         |
+| 2. Web responsive                              | Compliant         |
+| 3. Real-time monitoring (CCTV, Sensors)        | Compliant         |
+| 4. Cloud-agnostic deployment                   | Compliant         |
+| 5. Secure data handling (HTTPS)                | Compliant         |
+| 6. Interoperability (standard protocols)       | Compliant         |
+| 7. Integration via API/adaptors                | Compliant         |
+| 8. Configurable and customizable               | Compliant         |
+| 9. Integration<br>with SSO, LDAP               | Compliant         |
+| 10. Integration with multiple automation       |                   |
+| systems                                        | Compliant         |
+| 11. Integration with multiple database systems | Compliant         |
+
+**Supporting Document Uploaded:** OEM/ISV Declaration Form (Annexure 10) signed and stamped.
+
+## **4. Compliance and Declarations**
+
+- We confirm that we have submitted an **EMD of Rs. 10 Lakhs**.
+- We have digitally signed and uploaded the **Integrity Pact (IP)** as per Annexure 6.
+- We have digitally signed and uploaded the **Non-Disclosure Agreement (NDA)** as per Annexure 7.
+- We confirm we are not on the Black/Holiday List of BPCL, MoP&NG, or any Oil PSE.
+- We accept all contract terms and conditions as stated in Annexure 3.
+- We have submitted the **Vendor Code Creation Form** (Annexure 8) and **Common NEFT Mandate Form** (Annexure 14).
+
+## **Part 2: Quality Bid**
+
+# **5. Response to Quality Score Matrix (Ref: Annexure 1, Section 1.3)**
+
+We have prepared our quality bid to demonstrate our superior capability and the robustness of our proposed solution. We are prepared to present and demonstrate these capabilities to the BPCL evaluation committee.
+
+## **1. Solution / Platform Implementation (Max Marks: 30)**
+
+- **Our Claim:** We have successfully implemented **3 projects** meeting the specified criteria (Value > Rs. 6 Cr and integration of min. 3 systems) in the last 5 years. We claim the **maximum 30 marks**.
+- **Project Details:**
+  - 1. **Client:** National Energy Corp (Power Utility)
+    - **Value:** Rs. 8.2 Cr
+    - **Systems Integrated:** IoT (Smart Meters), SCADA, ERP (SAP), Automation (Grid Switches), Data Lake.
+  - 2. **Client:** Global Mining Resources (Mining)
+    - **Value:** Rs. 7.5 Cr
+    - **Systems Integrated:** IoT (Sensors), SCADA, ERP, Automation (PLCs), Data Warehouse.
+
+- 3. **Client:** PetroLink Pipelines (Oil & Gas)
+  - **Value:** Rs. 6.8 Cr
+  - **Systems Integrated:** IoT (CCTV), SCADA, ERP (Workflow), Automation (Valves), Data Lake.
+- **Documents Uploaded:** Declaration from OEM (Annexure 13), TPIA Certified document (Annexure 12).
+
+## **2. Bidders' Certification for Service Delivery (Max Marks: 10)**
+
+- **Our Claim:** Innovate Integration Solutions is appraised at **CMMI for Services, Maturity Level 5**. We claim the **maximum 10 marks**.
+- **Document Uploaded:** Self-attested valid CMMI Level 5 certificate.
+
+## **3. Demonstration of Platform (Max Marks: 35)**
+
+- We are prepared to demonstrate the full end-to-end functionality of our 'Unity' platform on a cloud environment. The demonstration will cover:
+  - **Exception Handling:** Live creation of an exception from a simulated field event, automated SOP workflow initiation, and notification via SMS/Email.
+  - **KPI Monitoring:** Real-time dashboards showing KPIs fed from simulated instruments (ATG, FCC) and various report generation (tabular, graphical, trend).
+  - **Bi-directional Control:** A live demonstration of an FCC shutdown command triggered from the C&C platform.
+  - **GIS Mapping:** Dynamic asset mapping on a GIS interface with drill-down capability for asset information and status.
+  - **UI/UX:** Showcase of our intuitive, user-friendly, and web-responsive interface, demonstrating ease of navigation.
+
+## **4. Demonstration of Video Analytics (Max Marks: 10)**
+
+- We will demonstrate our partner VisionAI's analytics engine, which achieves >90% accuracy, using both live and pre-recorded video feeds for all 5 use cases:
+  - 1. No Safety Belt detection
+  - 2. No Helmet detection
+  - 3. Intrusion Detection
+  - 4. Vehicle Count/Queue Management
+
+5. Automatic Number Plate Recognition (ANPR)
+
+### **5. Demonstration of Capabilities (Max Marks: 15)**
+
+- We will present three detailed case studies from the projects mentioned in point 1 above. Each presentation will detail:
+  - **Implementation Approach:** Our methodology, project plan, risk management, and stakeholder engagement.
+  - **Integration Approach:** The specific API-based, SOA-compliant integration architecture used to connect disparate systems.
+  - **Scale Handled:** Details on the number of systems, locations, data tags, and instruments handled for each project.
+
+### **Part 3: Price Bid**
+
+## **6. Price Bid Submission (Ref: Annexure 1, Section 1.4)**
+
+The following price bid is submitted online in the prescribed format on the eprocurement portal. All costs are in INR and exclusive of taxes
+
+| Sl.No | Item            | Unit           | Qty  | Unit Cost   | Total Cost  |
+|-------|-----------------|----------------|------|-------------|-------------|
+|       |                 |                |      | (Ex. Tax)   | (Ex. Tax)   |
+|       | C&C Platform    |                |      |             |             |
+|       | and it's        |                |      |             |             |
+| 1     | components      | Lump-sum       | 1    | 3,50,00,000 | 3,50,00,000 |
+|       | AMC of C&C      |                |      |             |             |
+|       | Platform (10%   |                |      |             |             |
+| 2     | of Item 1)      | Per year       | 4    | 35,00,000   | 1,40,00,000 |
+|       | VA Solution at  |                |      |             |             |
+|       | RO (10          |                |      |             |             |
+| 3     | Analytics)      | Per device     | 150  | 45,000      | 67,50,000   |
+|       | AMC VA          |                |      |             |             |
+|       | Solution at RO  | Per device per |      |             |             |
+| 4     | (12% of Item 3) | quarter        | 2400 | 1,350       | 32,40,000   |
+|       | VA Solution at  |                |      |             |             |
+|       | Terminals/LPG   |                |      |             |             |
+| 5     | (20 Analytics)  | Per device     | 130  | 75,000      | 97,50,000   |
+|       | AMC VA          |                |      |             |             |
+|       | Solution at     |                |      |             |             |
+|       | Terminals/LPG   | Per device per |      |             |             |
+| 6     | (12% of Item 5) | quarter        | 2080 | 2,250       | 46,80,000   |
+|       | Implementation  |                |      |             |             |
+|       | Cost of C&C     |                |      |             |             |
+| 7     | Platform        | Lump-sum       | 1    | 1,25,00,000 | 1,25,00,000 |
+
+|    | Platform         |              |      |           |             |
+|----|------------------|--------------|------|-----------|-------------|
+|    | Maintenance      |              |      |           |             |
+| 8  | Support          | Per quarter  | 16   | 12,00,000 | 1,92,00,000 |
+|    | Call Centre      |              |      |           |             |
+|    | Solution (SaaS - | Per user per |      |           |             |
+| 9  | 30 User)         | month        | 1392 | 2,500     | 34,80,000   |
+|    | Operator Cost    | Per man      |      |           |             |
+| 10 | Year 1           | month        | 240  | 60,000    | 1,44,00,000 |
+|    | Operator Cost    | Per man      |      |           |             |
+| 11 | Year 2           | month        | 288  | 63,000    | 1,81,44,000 |
+|    | Operator Cost    | Per man      |      |           |             |
+| 12 | Year 3           | month        | 288  | 66,150    | 1,90,51,200 |
+|    | Operator Cost    | Per man      |      |           |             |
+| 13 | Year 4           | month        | 288  | 69,458    | 2,00,04,704 |
+|    | Operator Cost    | Per man      |      |           |             |
+| 14 | Year 5           | month        | 288  | 72,931    | 2,10,04,128 |
+|    | Man-day Rate     |              |      |           |             |
+|    | for Change       |              |      |           |             |
+| 15 | Request          | Per Man-day  | 1000 | 25,000    | 2,50,00,000 |
+
+**Note:** The above table is a representation. The final binding submission is made on the e-procurement portal https://bpcleproc.in.
+
+#### **Annexures (As Submitted on E-Procurement Portal)**
+
+- **Annexure 6: Pro forma for Integrity Pact (IP)** Duly signed and stamped.
+- **Annexure 7: Pro forma for Non-Disclosure Agreement (NDA)** Duly signed and stamped.
+- **Annexure 8: Vendor Code Creation Form** Completed with Innovate Integration Solutions Pvt. Ltd. details.
+- **Annexure 9: Pro forma for Performance Bank Guarantee** Acknowledged. To be provided upon award of contract.
+- **Annexure 10: OEM/ISV Declaration Form** Completed for our 'Unity' Platform and partner solutions.
+- **Annexure 11: Response to BQC Criteria a, Proven Track Record** Detailed table with client names, project values, completion certificates, and contact details for verification.
+- **Annexure 12: Response to BQC Criteria a, & Quality Bid Criteria 1 - Certificate from TPIA** - Certificate from 'Certified Verification Services India (Regd.)' verifying the project details provided in Annexure 11 & 13.
+
+- **Annexure 13: Response for Evaluation Criteria - 1** OEM declaration detailing the projects where our 'Unity' platform has been implemented, confirming the integration of required systems.
+- **Annexure 14: Common NEFT Mandate Form** Completed with our bank details.

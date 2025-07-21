@@ -1,0 +1,16 @@
+{
+    "Technical Compliance": {
+        "Platform Capabilities": "",
+        "Platform to have ability to control bi-directional control of field devices": "",
+        "Platform to be web responsive": "",
+        "Platform should have capability to monitor real time information from instruments like CCTV, Field Sensors, etc.": "",
+        "Platform should be able to be deployed on any of the cloud service provider": "",
+        "Platform should handle all the data securely using HTTPS protocol": "",
+        "Platform should be compliant with interoperability so that it can integrate with any standard protocol or system available": "",
+        "Platform should be able to integrate using API or integration adaptors": "",
+        "Platform should have most of the features configurable, however it should be customizable using objects/libraries/other programming languages": "",
+        "Platform should be able to integrate with any authorization system for sign on like SSO, LDAP etc.": "",
+        "Platform should have the capability to integrate with multiple independent automation systems": "",
+        "Platform should have the capability to integrate with multiple database systems": ""
+    }
+}

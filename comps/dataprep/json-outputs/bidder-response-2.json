@@ -1,0 +1,96 @@
+{
+  "Technical Compliance": {
+    "Platform Capability": "Platform Capability",
+    "1. Bi-directional control of field devices": "Compliant",
+    "2. Web responsive": "Compliant",
+    "3. Real-time monitoring (CCTV, Sensors)": "Compliant",
+    "4. Cloud-agnostic deployment": "Compliant",
+    "5. Secure data handling (HTTPS)": "Compliant",
+    "6. Interoperability (standard protocols)": "Compliant",
+    "7. Integration via API/adaptors": "Compliant",
+    "8. Configurable and customizable": "Compliant",
+    "9. Integration with SSO, LDAP": "Compliant",
+    "10. Integration with multiple automation systems": "Compliant",
+    "11. Integration with multiple database systems": "Compliant"
+  },
+  "Price Compliance": {
+    "C&C Platform and it's components (All License/Modules Inclusive)": {
+      "Unit": "Lump-sum",
+      "Qty": "1",
+      "Unit Cost": "4,00,00,000",
+      "Total Cost": "4,00,00,000"
+    },
+    "AMC of C&C Platform (10% of Item 1)": {
+      "Unit": "Per year",
+      "Qty": "4",
+      "Unit Cost": "40,00,000",
+      "Total Cost": "1,60,00,000"
+    },
+    "VA Solution at RO (10 Analytics)": {
+      "Unit": "Per device",
+      "Qty": "160",
+      "Unit Cost": "50,000",
+      "Total Cost": "80,00,000"
+    },
+    "AMC VA Solution at RO (12% of Item 3)": {
+      "Unit": "Per device per quarter",
+      "Qty": "2560",
+      "Unit Cost": "1,400",
+      "Total Cost": "35,84,000"
+    },
+    "VA Solution at Terminals/LPG (20 Analytics)": {
+      "Unit": "Per device",
+      "Qty": "140",
+      "Unit Cost": "80,000",
+      "Total Cost": "1,12,00,000"
+    },
+    "AMC VA Solution at Terminals/LPG (12% of Item 5)": {
+      "Unit": "Per device per quarter",
+      "Qty": "2240",
+      "Unit Cost": "2,300",
+      "Total Cost": "51,52,000"
+    },
+    "Implementation Cost of C&C Platform": {
+      "Unit": "Lump-sum",
+      "Qty": "1",
+      "Unit Cost": "1,50,00,000",
+      "Total Cost": "1,50,00,000"
+    },
+    "Operator Cost Year 1(per man month)": {
+      "Unit": "Per man month",
+      "Qty": "240",
+      "Unit Cost": "75,000",
+      "Total Cost": "1,80,00,000"
+    },
+    "Operator Cost Year 2(per man month)": {
+      "Unit": "Per man month",
+      "Qty": "288",
+      "Unit Cost": "77,000",
+      "Total Cost": "2,21,76,000"
+    },
+    "Operator Cost Year 3(per man month)": {
+      "Unit": "Per man month",
+      "Qty": "288",
+      "Unit Cost": "79,000",
+      "Total Cost": "2,27,52,000"
+    },
+    "Operator Cost Year 4(per man month)": {
+      "Unit": "Per man month",
+      "Qty": "288",
+      "Unit Cost": "81,000",
+      "Total Cost": "2,33,28,000"
+    },
+    "Operator Cost Year 5(per man month)": {
+      "Unit": "Per man month",
+      "Qty": "288",
+      "Unit Cost": "83,000",
+      "Total Cost": "2,39,04,000"
+    },
+    "Man-day Rate for Modifications / Change Request": {
+      "Unit": "Per Man day",
+      "Qty": "1000",
+      "Unit Cost": "15,000",
+      "Total Cost": "1,50,00,000"
+    }
+  }
+}
