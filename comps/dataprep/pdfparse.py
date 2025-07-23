@@ -7,7 +7,7 @@ load_dotenv()
 
 # Path to your PDF file
 # pdf_path = os.environ("PDF_PATH")
-pdf_path = "/home/raghu-intel/Ervin/test-ocr/d_Jsw-pages-1.pdf"
+pdf_path = "/home/raghu-intel/Ervin/test-ocr/control-center-bid-separated.pdf"
 
 def parse_pdf(pdf_path):
     # Create the Tree and parser

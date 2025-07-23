@@ -16,10 +16,17 @@ from comps.parsers.ocr_text import OCRText
 from comps.core.utils import mkdirIfNotExists
 from PIL import Image
 import pytesseract
+from dotenv import load_dotenv
 #import tesseract-ocr as tesseract
+
+load_dotenv()
 
 OUTPUT_DIR = "out"
 NCERT_TOC_DIR = "../parsers/ncert_toc"
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+
+if not GEMINI_API_KEY:
+    raise ValueError("GEMINI_API_KEY is not set in the environment variables.")
 
 logger = CustomLogger("treeparser")
 
@@ -34,7 +41,11 @@ class TreeParser:
         if not output_exists(os.path.join(OUTPUT_DIR, filename), filename):
             config = {
                 "output_format": "markdown",
-                "use_llm": False,
+                "use_llm": True,
+                "format_lines": True,
+                "force_ocr": True,
+                "TORCH_DEVICE": "cpu",
+                "gemini_api_key": GEMINI_API_KEY,
             }
             converter = PdfConverter(
                 artifact_dict=create_model_dict(),
@@ -43,7 +54,13 @@ class TreeParser:
             rendered = converter(file)
             os.mkdir(os.path.join(OUTPUT_DIR, filename))
             save_output(rendered, os.path.join(OUTPUT_DIR, filename), filename)
-            logger.info("Output generated")
+            markdown_dir = os.path.join(OUTPUT_DIR, filename, "markdown")
+            print("Markdown directory:", markdown_dir)
+            if not os.path.exists(markdown_dir):
+                os.makedirs(markdown_dir)
+
+            logger.info("Output generated (PDF-Marker)")
+
 
     def detect_level(self, headings):
         level_pattern = re.compile(r'^\d+(\.\d+)*\.?\s')
@@ -53,7 +70,6 @@ class TreeParser:
         return False
     
     def generate_toc_using_level(self, filename, headings):
-
         with open(os.path.join(OUTPUT_DIR, filename, 'toc.txt'), 'w') as file_toc:
 
             level_pattern = re.compile(r'^\d+(\.\d+)*\.?\s')
@@ -66,9 +82,7 @@ class TreeParser:
                     file_toc.write(f"{level};{heading['title']}\n")
 
     def generate_toc_using_size(self, filename, headings):
-
         with open(os.path.join(OUTPUT_DIR, filename, 'toc.txt'), 'w') as file:
-
             dictLevel = SortedDict()
             list_headings = []
 
@@ -190,10 +204,8 @@ class TreeParser:
                         currNode.append_content(text_obj)
                         for table in tables:
                             currNode.append_content(table)
-                        # Process OCR images in this folder
                         ocr_texts = self.extract_images_ocr(os.path.join(OUTPUT_DIR, filename))
                         for ocr_obj in ocr_texts:
-                            # You can attach to the root node or current node
                             rootNode.append_content(ocr_obj)
                         tables.clear()
                         content = ""
@@ -309,6 +321,7 @@ class TreeParser:
     def get_output_path(self, tree):
         filename = self.get_filename(tree.file)
         return os.path.join(OUTPUT_DIR, filename, "output.txt")
+
     def extract_images_ocr(self, folder_path):
         """
         Extract text from images in the given folder.
