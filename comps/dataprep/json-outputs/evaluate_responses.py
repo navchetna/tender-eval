@@ -31,7 +31,7 @@ def format_json_as_text(json_obj):
 def construct_prompt(tender_str, bidder_str):
     st=str("")
     for j in range(bid_no):
-            st+=("BIDDER RESPONSE JSON "+str({j+1})+"\n")
+            st+=("BIDDER RESPONSE JSON "+str(j+1)+"\n")
             st+=(bidder_str[j]) 
     prompt = f"""
         You are participating in a government tender evaluation process.
