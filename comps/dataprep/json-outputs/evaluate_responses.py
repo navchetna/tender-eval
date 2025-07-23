@@ -47,7 +47,7 @@ def construct_prompt(tender_str, bidder_str):
         - Technical compliance
         - Pricing reasonableness
         - Completeness and relevance of fields
-        - Please Return only the score for each bidder and a final evaluatorâ€™s summary paragraph explaining your rationale for the scoring distribution.
+        - Please Return only the score for each bidder and a final evaluator’s summary paragraph explaining your rationale for the scoring distribution.
         
         ### TENDER REQUIREMENTS JSON:
         {tender_str}
