@@ -37,7 +37,7 @@ def construct_prompt(tender_str, bidder_str):
         You are participating in a government tender evaluation process.
 
         You will be provided:
-        1. The Tender Requirements JSON structure â€” this defines all expected fields and compliance criteria. These fields may be present but contain empty or placeholder values.
+        1. The Tender Requirements JSON structure — this defines all expected fields and compliance criteria. These fields may be present but contain empty or placeholder values.
         2. Multiple Bidder Response JSON documents, each in the same format as the tender, but filled in with actual bids from different vendors.
 
         Your tasks:
