@@ -42,10 +42,14 @@ class TreeParser:
             config = {
                 "output_format": "markdown",
                 "use_llm": True,
+                "llm_service": "marker.services.openai.OpenAIService",
+                "OpenAIService_openai_base_url": "http://localhost:8000/v1",
+                "OpenAIService_openai_model": "Qwen/Qwen2.5-VL-7B-Instruct",
+                "openai_api_key": "DUMMY_KEY",
                 "format_lines": True,
                 "force_ocr": True,
                 "TORCH_DEVICE": "cpu",
-                "gemini_api_key": GEMINI_API_KEY,
+                # "gemini_api_key": GEMINI_API_KEY,
             }
             converter = PdfConverter(
                 artifact_dict=create_model_dict(),
@@ -60,7 +64,6 @@ class TreeParser:
                 os.makedirs(markdown_dir)
 
             logger.info("Output generated (PDF-Marker)")
-
 
     def detect_level(self, headings):
         level_pattern = re.compile(r'^\d+(\.\d+)*\.?\s')
