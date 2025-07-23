@@ -11,7 +11,7 @@ from comps.parsers.treeparser import TreeParser
 
 
 
-compliance_sections = {'technical': '3;1.2.2 Technical Requirements', 'price': '2;1.4 Price Bid Evaluation'}
+# compliance_sections = {'technical': '3;1.2.2 Technical Requirements', 'price': '2;1.4 Price Bid Evaluation'}
 
 bidder_response_sections = {'technical': '2;3. Response to Technical Requirements (Ref: Annexure1, Section1.2.2)', 'price': '2;6. Price Bid Submission (Ref: Annexure1, Section1.4)'}
 
@@ -57,9 +57,9 @@ def retrieve_from_pdf(target_node):
 
 def markdown_to_df(markdown_content, section_title):
     section_title = section_title.replace(" ", "_")
-    clean_table = re.sub(r'<br>', ' ', markdown_content)
+    # clean_table = re.sub(r'<br>', ' ', markdown_content)
 
-    lines = [line for line in clean_table.splitlines() if line.strip().startswith('|')]
+    lines = [line for line in markdown_content.splitlines() if line.strip().startswith('|')]
     cleaned_table_str = '\n'.join(lines)
 
     df = pd.read_csv(StringIO(cleaned_table_str), sep='|', engine='python', skipinitialspace=True)
