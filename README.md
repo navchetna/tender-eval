@@ -1,4 +1,4 @@
-# tender-eval
+# Tender Evaluation
 
 Purpose: Large Companies set up tenders for the procurement of infrastructure needed by them. In order to reduce bias and select the best bid offered by other companies a streamlined system needs to be implemented.
 
