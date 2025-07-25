@@ -1,3 +1,8 @@
+import re
+import json 
+import os
+import pytesseract
+from dotenv import load_dotenv
 from marker.converters.pdf import PdfConverter
 from marker.models import create_model_dict
 from marker.output import output_exists, save_output
@@ -5,9 +10,6 @@ from sortedcontainers import SortedDict
 from pdfminer.pdfparser import PDFParser, PDFSyntaxError
 from pdfminer.pdfdocument import PDFDocument, PDFNoOutlines
 from difflib import SequenceMatcher
-import re
-import json 
-import os
 from comps.core.logger import CustomLogger
 from comps.parsers.node import Node
 from comps.parsers.text import Text
@@ -15,18 +17,11 @@ from comps.parsers.table import Table
 from comps.parsers.ocr_text import OCRText
 from comps.core.utils import mkdirIfNotExists
 from PIL import Image
-import pytesseract
-from dotenv import load_dotenv
-#import tesseract-ocr as tesseract
 
 load_dotenv()
 
 OUTPUT_DIR = "out"
 NCERT_TOC_DIR = "../parsers/ncert_toc"
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-
-if not GEMINI_API_KEY:
-    raise ValueError("GEMINI_API_KEY is not set in the environment variables.")
 
 logger = CustomLogger("treeparser")
 
@@ -45,11 +40,10 @@ class TreeParser:
                 "llm_service": "marker.services.openai.OpenAIService",
                 "OpenAIService_openai_base_url": "http://localhost:8000/v1",
                 "OpenAIService_openai_model": "Qwen/Qwen2.5-VL-7B-Instruct",
-                "openai_api_key": "DUMMY_KEY",
+                "openai_api_key": os.environ.get("OPENAI_API_KEY", "DUMMY_KEY"),
                 "format_lines": True,
                 "force_ocr": True,
                 "TORCH_DEVICE": "cpu",
-                # "gemini_api_key": GEMINI_API_KEY,
             }
             converter = PdfConverter(
                 artifact_dict=create_model_dict(),
@@ -158,18 +152,12 @@ class TreeParser:
     def parse_markdown(self, filename, rootNode, recentNodeDict):
         toc_file = None
 
-        if "grade" in filename:
-            toc_file = open(os.path.join(NCERT_TOC_DIR, f"{filename}.txt"), "r")
-        else:
-            toc_file = open(os.path.join(OUTPUT_DIR, filename, "toc.txt"), "r")
+        toc_file = open(os.path.join(OUTPUT_DIR, filename, "toc.txt"), "r")
         toc_line = toc_file.readline()
                 
         currNode = rootNode
-
         tables = []
-
         content = ""
-
         previous_line = ""
 
         with open(os.path.join(OUTPUT_DIR, filename, filename + ".md"), 'r') as markdown_file:
@@ -258,7 +246,6 @@ class TreeParser:
             return
         
         node.output_node_info()
-
         total = node.get_length_children()
 
         for i in range(total):
@@ -275,7 +262,6 @@ class TreeParser:
             return
         
         data = {}
-
         heading = node.get_heading()
 
         data[heading] = {}
