@@ -1,6 +1,7 @@
 import json
 import os
 from groq import Groq
+import subprocess
 
 # Set your Groq API Key here
 GROQ_API_KEY = ""
@@ -80,7 +81,24 @@ def evaluate_with_groq(prompt):
     )
     response = chat_completion.choices[0].message.content
     return response
+def evaluate_with_ollama(prompt, model="deepseek-r1:1.5b"):
+    try:
+        # Run the Ollama CLI command
+        result = subprocess.run(
+            ["ollama", "run", model],
+            input=prompt,  
+            capture_output=True,
+            text=True,
+            check=True  # Raise an exception for non-zero exit codes
+        )
 
+        # Check if the command was successful
+        if result.returncode == 0:
+            return result.stdout.strip()  # Return the output
+        else:
+            return f"Error: {result.stderr.strip()}"  # Return the error message
+    except FileNotFoundError:
+        return "Ollama CLI is not installed or not found in PATH."
 def main():
     tender_json = load_json(TENDER_FILE)
     bidder_json=[]
@@ -95,7 +113,7 @@ def main():
 
     prompt = construct_prompt(tender_str, bidder_str)
     result = evaluate_with_groq(prompt)
-
+    #result = evaluate_with_ollama(prompt)
     print("\n=== ðŸ” Evaluation Result ===\n")
     print(result)
 
