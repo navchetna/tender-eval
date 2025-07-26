@@ -52,10 +52,6 @@ class TreeParser:
             rendered = converter(file)
             os.mkdir(os.path.join(OUTPUT_DIR, filename))
             save_output(rendered, os.path.join(OUTPUT_DIR, filename), filename)
-            markdown_dir = os.path.join(OUTPUT_DIR, filename, "markdown")
-            print("Markdown directory:", markdown_dir)
-            if not os.path.exists(markdown_dir):
-                os.makedirs(markdown_dir)
 
             logger.info("Output generated (PDF-Marker)")
 

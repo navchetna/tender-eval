@@ -2,18 +2,19 @@ import pandas as pd
 import json
 import re
 
-def _clean_header(h):
-    h = str(h).strip()
-    h = re.sub(r'\s+', ' ', h)
-    return h.title()
-
-def excel_to_nested_json(excel_file,
+def excel_to_price_compliance_json(
+    excel_file,
     sheet_name=0,
     root_key='Data',
     normalise_headers=True,
     allow_fallback=False
-    ):
+):
     df = pd.read_excel(excel_file, sheet_name=sheet_name, dtype=str)
+
+    def _clean_header(h):
+        h = str(h).strip()
+        h = re.sub(r'\s+', ' ', h)
+        return h.title()
 
     if normalise_headers:
         df.columns = [_clean_header(c) for c in df.columns]
@@ -26,7 +27,8 @@ def excel_to_nested_json(excel_file,
             raise KeyError("No column named 'Item' found in the sheet.")
 
     df = df.dropna(subset=[key_column])
-    nested = {root_key: {}}
+
+    nested = {}
 
     for _, row in df.iterrows():
         item_name = str(row[key_column]).strip()
@@ -35,7 +37,8 @@ def excel_to_nested_json(excel_file,
             for col, val in row.items()
             if col != key_column
         }
-        nested[root_key][item_name] = payload
+        nested[item_name] = payload
+
     return nested
 
 def main():
