@@ -1,5 +1,96 @@
-**__pycache__**
-**env**
-**out**
-**cache**
-**vllm**
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging 
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments (all common variants)
+env/
+.env/
+ENV/
+.ENV/
+venv/
+.venv/
+VENV/
+.VENV/
+env.bak/
+.venv.bak/
+*.env/
+*.venv/
+venv.bak/
+ENV.bak/
+.virtualenv/
+.virtualenvs/
+pvenv/
+pyenv/
+.pythonenv/
+*.virtualenv/
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# dotenv
+.env
+.env.*
+
+# Output directories
+out/
+output/
+logs/
+
+# VS Code and IDEs
+.vscode/
+.idea/
+
+# Miscellaneous
+*.log
+*.pot
+*.mo
+*.sqlite3
+.DS_Store
+Thumbs.db

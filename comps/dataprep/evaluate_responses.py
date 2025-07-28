@@ -1,14 +1,15 @@
 import json
 import os
 from groq import Groq
+from dotenv import load_dotenv
 
-# Set your Groq API Key here
-GROQ_API_KEY = ""
+load_dotenv()
 
-# Paths to JSON files
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+
 TENDER_FILE = "/home/aayush/tender-eval/comps/dataprep/json-outputs/tender-requirements.json"
-#Dynamically taking in the Bids!
 directory="/home/aayush/tender-eval/comps/dataprep/json-outputs"
+
 lst=os.listdir(directory)
 bid_no=int(len(lst)/3)
 #bid_no = int(3)
@@ -96,7 +97,7 @@ def main():
     prompt = construct_prompt(tender_str, bidder_str)
     result = evaluate_with_groq(prompt)
 
-    print("\n=== ðŸ” Evaluation Result ===\n")
+    print("\n=== Evaluation Result ===\n")
     print(result)
 
 if __name__ == "__main__":
