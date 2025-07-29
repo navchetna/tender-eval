@@ -1,0 +1,137 @@
+{
+    "C&C Platform and its components (All License/Modules Inclusive)": {
+        "Si.No": "1",
+        "Unit Of Measure": "Lump-sum",
+        "Total Quantity": "1",
+        "Unit Cost": "",
+        "Total Cost (Ex. Tax)": "",
+        "Tax Rate": "",
+        "Total Cost": ""
+    },
+    "AMC of C&C Platform License & Modules per year after 1 year warranty": {
+        "Si.No": "2",
+        "Unit Of Measure": "Per year",
+        "Total Quantity": "4",
+        "Unit Cost": "",
+        "Total Cost (Ex. Tax)": "",
+        "Tax Rate": "",
+        "Total Cost": ""
+    },
+    "VA Solution at RO (10 Analytics at one location)": {
+        "Si.No": "3",
+        "Unit Of Measure": "Per device",
+        "Total Quantity": "150",
+        "Unit Cost": "",
+        "Total Cost (Ex. Tax)": "",
+        "Tax Rate": "",
+        "Total Cost": ""
+    },
+    "AMC VA Solution at RO (10 Analytics at one location)": {
+        "Si.No": "4",
+        "Unit Of Measure": "Per device per quarter",
+        "Total Quantity": "2400",
+        "Unit Cost": "",
+        "Total Cost (Ex. Tax)": "",
+        "Tax Rate": "",
+        "Total Cost": ""
+    },
+    "VA Solution at Terminals and LPG Plants (upto 20 Analytics at one location)": {
+        "Si.No": "5",
+        "Unit Of Measure": "Per device",
+        "Total Quantity": "130",
+        "Unit Cost": "",
+        "Total Cost (Ex. Tax)": "",
+        "Tax Rate": "",
+        "Total Cost": ""
+    },
+    "AMC VA Solution at Terminals and LPG Plants (upto 20 Analytics at one location)": {
+        "Si.No": "6",
+        "Unit Of Measure": "Per device per quarter",
+        "Total Quantity": "2080",
+        "Unit Cost": "",
+        "Total Cost (Ex. Tax)": "",
+        "Tax Rate": "",
+        "Total Cost": ""
+    },
+    "Implementation Cost of C&C Platform": {
+        "Si.No": "7",
+        "Unit Of Measure": "Lump-sum",
+        "Total Quantity": "1",
+        "Unit Cost": "",
+        "Total Cost (Ex. Tax)": "",
+        "Tax Rate": "",
+        "Total Cost": ""
+    },
+    "Platform Maintenance Support": {
+        "Si.No": "8",
+        "Unit Of Measure": "Per quarter",
+        "Total Quantity": "16",
+        "Unit Cost": "",
+        "Total Cost (Ex. Tax)": "",
+        "Tax Rate": "",
+        "Total Cost": ""
+    },
+    "Call Centre Solution (SaaS-30 User)": {
+        "Si.No": "9",
+        "Unit Of Measure": "Per user per month",
+        "Total Quantity": "1392",
+        "Unit Cost": "",
+        "Total Cost (Ex. Tax)": "",
+        "Tax Rate": "",
+        "Total Cost": ""
+    },
+    "Operator Cost Year 1(per man month)": {
+        "Si.No": "10",
+        "Unit Of Measure": "Per man month",
+        "Total Quantity": "240",
+        "Unit Cost": "",
+        "Total Cost (Ex. Tax)": "",
+        "Tax Rate": "",
+        "Total Cost": ""
+    },
+    "Operator Cost Year 2(per man month)": {
+        "Si.No": "11",
+        "Unit Of Measure": "Per man month",
+        "Total Quantity": "288",
+        "Unit Cost": "",
+        "Total Cost (Ex. Tax)": "",
+        "Tax Rate": "",
+        "Total Cost": ""
+    },
+    "Operator Cost Year 3(per man month)": {
+        "Si.No": "12",
+        "Unit Of Measure": "Per man month",
+        "Total Quantity": "288",
+        "Unit Cost": "",
+        "Total Cost (Ex. Tax)": "",
+        "Tax Rate": "",
+        "Total Cost": ""
+    },
+    "Operator Cost Year 4(per man month)": {
+        "Si.No": "13",
+        "Unit Of Measure": "Per man month",
+        "Total Quantity": "288",
+        "Unit Cost": "",
+        "Total Cost (Ex. Tax)": "",
+        "Tax Rate": "",
+        "Total Cost": ""
+    },
+    "Operator Cost Year 5(per man month)": {
+        "Si.No": "14",
+        "Unit Of Measure": "Per man month",
+        "Total Quantity": "288",
+        "Unit Cost": "",
+        "Total Cost (Ex. Tax)": "",
+        "Tax Rate": "",
+        "Total Cost": ""
+    },
+    "Man-day Rate for Modifications / Change Request": {
+        "Si.No": "15",
+        "Unit Of Measure": "Per Man-day",
+        "Total Quantity": "1000",
+        "Unit Cost": "",
+        "Total Cost (Ex. Tax)": "",
+        "Tax Rate": "",
+        "Total Cost": ""
+    }
+}

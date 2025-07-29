@@ -1,0 +1,13 @@
+{
+    "1": "Platform to have ability to control bi-directional control of field devices",
+    "2": "Platform to be web responsive",
+    "3": "Platform should have capability to monitor real time information from instruments like<br>CCTV, Field Sensors, etc.",
+    "4": "Platform should be able to be deployed on any of the cloud service provider",
+    "5": "Platform should handle all the data securely using HTTPS protocol",
+    "6": "Platform should be compliant with interoperability so that it can integrate with any<br>standard protocol or system available",
+    "7": "Platform should be able to integrate using API or integration adaptors",
+    "8": "Platform should have most of the features configurable, however it should be<br>customizable using objects/libraries/other programming languages",
+    "9": "Platform should be able to integrate with any authorization system for sign on like SSO,<br>LDAP etc.",
+    "10": "Platform should have the capability to integrate with multiple independent automation<br>systems",
+    "11": "Platform should have the capability to integrate with multiple database systems"
+}

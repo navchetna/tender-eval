@@ -6,7 +6,7 @@ def excel_to_technical_compliance_json(excel_file):
 
     technical_json = {}
 
-    for _, row in df.iterrows():
+    for _, row in df.iloc[1:].iterrows():
         key = str(row[0]).strip() if pd.notna(row[0]) else None
         if key:
             value = str(row[1]) if len(row) > 1 and pd.notna(row[1]) else ""

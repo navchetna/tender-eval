@@ -1,0 +1,107 @@
+{
+    "C&C Platform and its components": {
+        "Si.No": "1",
+        "Unit": "Lump-sum",
+        "Qty": "1",
+        "Unit Cost (Ex. Tax)": "3,50,00,000",
+        "Total Cost (Ex. Tax)": "3,50,00,000"
+    },
+    "AMC of C&C Platform (10% of Item 1)": {
+        "Si.No": "2",
+        "Unit": "Per year",
+        "Qty": "4",
+        "Unit Cost (Ex. Tax)": "35,00,000",
+        "Total Cost (Ex. Tax)": "1,40,00,000"
+    },
+    "VA Solution at RO (10 Analytics)": {
+        "Si.No": "3",
+        "Unit": "Per device",
+        "Qty": "150",
+        "Unit Cost (Ex. Tax)": "45,000",
+        "Total Cost (Ex. Tax)": "67,50,000"
+    },
+    "AMC VA Solution at RO (12% of Item 3)": {
+        "Si.No": "4",
+        "Unit": "Per device per quarter",
+        "Qty": "2400",
+        "Unit Cost (Ex. Tax)": "1,350",
+        "Total Cost (Ex. Tax)": "32,40,000"
+    },
+    "VA Solution at Terminals/LPG (20 Analytics)": {
+        "Si.No": "5",
+        "Unit": "Per device",
+        "Qty": "130",
+        "Unit Cost (Ex. Tax)": "75,000",
+        "Total Cost (Ex. Tax)": "97,50,000"
+    },
+    "AMC VA Solution at Terminals/LPG (12% of Item 5)": {
+        "Si.No": "6",
+        "Unit": "Per device per quarter",
+        "Qty": "2080",
+        "Unit Cost (Ex. Tax)": "2,250",
+        "Total Cost (Ex. Tax)": "46,80,000"
+    },
+    "Implementation Cost of C&C Platform": {
+        "Si.No": "7",
+        "Unit": "Lump-sum",
+        "Qty": "1",
+        "Unit Cost (Ex. Tax)": "1,25,00,000",
+        "Total Cost (Ex. Tax)": "1,25,00,000"
+    },
+    "Platform Maintenance Support": {
+        "Si.No": "8",
+        "Unit": "Per quarter",
+        "Qty": "16",
+        "Unit Cost (Ex. Tax)": "12,00,000",
+        "Total Cost (Ex. Tax)": "1,92,00,000"
+    },
+    "Call Centre Solution (SaaS-30 User)": {
+        "Si.No": "9",
+        "Unit": "Per user per month",
+        "Qty": "1392",
+        "Unit Cost (Ex. Tax)": "2,500",
+        "Total Cost (Ex. Tax)": "34,80,000"
+    },
+    "Operator Cost Year 1": {
+        "Si.No": "10",
+        "Unit": "Per man month",
+        "Qty": "240",
+        "Unit Cost (Ex. Tax)": "60,000",
+        "Total Cost (Ex. Tax)": "1,44,00,000"
+    },
+    "Operator Cost Year 2": {
+        "Si.No": "11",
+        "Unit": "Per man month",
+        "Qty": "288",
+        "Unit Cost (Ex. Tax)": "63,000",
+        "Total Cost (Ex. Tax)": "1,81,44,000"
+    },
+    "Operator Cost Year 3": {
+        "Si.No": "12",
+        "Unit": "Per man month",
+        "Qty": "288",
+        "Unit Cost (Ex. Tax)": "66,150",
+        "Total Cost (Ex. Tax)": "1,90,51,200"
+    },
+    "Operator Cost Year 4": {
+        "Si.No": "13",
+        "Unit": "Per man month",
+        "Qty": "288",
+        "Unit Cost (Ex. Tax)": "69,458",
+        "Total Cost (Ex. Tax)": "2,00,04,704"
+    },
+    "Operator Cost Year 5": {
+        "Si.No": "14",
+        "Unit": "Per man month",
+        "Qty": "288",
+        "Unit Cost (Ex. Tax)": "72,931",
+        "Total Cost (Ex. Tax)": "2,10,04,128"
+    },
+    "Man-day Rate for Change Request": {
+        "Si.No": "15",
+        "Unit": "Per Man-day",
+        "Qty": "1000",
+        "Unit Cost (Ex. Tax)": "25,000",
+        "Total Cost (Ex. Tax)": "2,50,00,000"
+    }
+}
