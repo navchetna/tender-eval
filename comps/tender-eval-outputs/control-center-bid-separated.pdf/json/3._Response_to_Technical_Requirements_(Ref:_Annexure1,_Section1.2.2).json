@@ -1,0 +1,13 @@
+{
+    "1. Bi-directional control of field devices": "Compliant",
+    "2. Web responsive": "Compliant",
+    "3. Real-time monitoring (CCTV, Sensors)": "Compliant",
+    "4. Cloud-agnostic deployment": "Compliant",
+    "5. Secure data handling (HTTPS)": "Compliant",
+    "6. Interoperability (standard protocols)": "Compliant",
+    "7. Integration via API/adaptors": "Compliant",
+    "8. Configurable and customizable": "Compliant",
+    "9. Integration with SSO, LDAP": "Compliant",
+    "10. Integration with multiple automation systems": "Compliant",
+    "11. Integration with multiple database systems": "Compliant"
+}

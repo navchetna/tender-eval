@@ -78,7 +78,6 @@ def ask_groq_with_file_content(file_path):
 if __name__ == "__main__":
     
     GROQ_API_KEY= os.getenv('GROQ_API_KEY')
-    # TOC_FILE_PATH = os.getenv('TOC_FILE_PATH')
     TOC_FILE_PATH = "/home/intel/kubernetes_files/aayush/Tender-Eval/comps/Search/out/control-center-bid-1/toc.txt"
     
     sections_str = ask_groq_with_file_content(TOC_FILE_PATH)

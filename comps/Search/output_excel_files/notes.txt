@@ -1,2 +1,0 @@
-=> some cols not detected from pdf parser
-=> Formatting of table / (mkdown_df)

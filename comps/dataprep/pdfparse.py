@@ -5,9 +5,9 @@ from comps.parsers.treeparser import TreeParser
 
 load_dotenv()
 
-# Path to your PDF file
-# pdf_path = os.environ("PDF_PATH")
-pdf_path = "/home/intel/kubernetes_files/aayush/control-center-bid-1.pdf"
+pdf_path = os.environ.get("PDF_PATH")
+print("Parsing pdf: ", pdf_path)
+# pdf_path = "/home/ritik-intel/Ervin/tender-doc.pdf"
 
 def parse_pdf(pdf_path):
     # Create the Tree and parser
@@ -28,7 +28,7 @@ def parse_pdf(pdf_path):
     return (tree)
 
 
-tree=parse_pdf(pdf_path)
+tree = parse_pdf(pdf_path)
 
 
 

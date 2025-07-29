@@ -1,3 +1,8 @@
+import re
+import json 
+import os
+import pytesseract
+from dotenv import load_dotenv
 from marker.converters.pdf import PdfConverter
 from marker.models import create_model_dict
 from marker.output import output_exists, save_output
@@ -5,9 +10,6 @@ from sortedcontainers import SortedDict
 from pdfminer.pdfparser import PDFParser, PDFSyntaxError
 from pdfminer.pdfdocument import PDFDocument, PDFNoOutlines
 from difflib import SequenceMatcher
-import re
-import json 
-import os
 from comps.core.logger import CustomLogger
 from comps.parsers.node import Node
 from comps.parsers.text import Text
@@ -15,8 +17,8 @@ from comps.parsers.table import Table
 from comps.parsers.ocr_text import OCRText
 from comps.core.utils import mkdirIfNotExists
 from PIL import Image
-import pytesseract
-#import tesseract-ocr as tesseract
+
+load_dotenv()
 
 OUTPUT_DIR = "out"
 NCERT_TOC_DIR = "../parsers/ncert_toc"
@@ -34,7 +36,14 @@ class TreeParser:
         if not output_exists(os.path.join(OUTPUT_DIR, filename), filename):
             config = {
                 "output_format": "markdown",
-                "use_llm": False,
+                "use_llm": True,
+                "llm_service": "marker.services.openai.OpenAIService",
+                "OpenAIService_openai_base_url": "http://localhost:8000/v1",
+                "OpenAIService_openai_model": "Qwen/Qwen2.5-VL-7B-Instruct",
+                "openai_api_key": os.environ.get("OPENAI_API_KEY", "DUMMY_KEY"),
+                "format_lines": True,
+                "force_ocr": True,
+                "TORCH_DEVICE": "cpu",
             }
             converter = PdfConverter(
                 artifact_dict=create_model_dict(),
@@ -43,7 +52,8 @@ class TreeParser:
             rendered = converter(file)
             os.mkdir(os.path.join(OUTPUT_DIR, filename))
             save_output(rendered, os.path.join(OUTPUT_DIR, filename), filename)
-            logger.info("Output generated")
+
+            logger.info("Output generated (PDF-Marker)")
 
     def detect_level(self, headings):
         level_pattern = re.compile(r'^\d+(\.\d+)*\.?\s')
@@ -53,7 +63,6 @@ class TreeParser:
         return False
     
     def generate_toc_using_level(self, filename, headings):
-
         with open(os.path.join(OUTPUT_DIR, filename, 'toc.txt'), 'w') as file_toc:
 
             level_pattern = re.compile(r'^\d+(\.\d+)*\.?\s')
@@ -66,9 +75,7 @@ class TreeParser:
                     file_toc.write(f"{level};{heading['title']}\n")
 
     def generate_toc_using_size(self, filename, headings):
-
         with open(os.path.join(OUTPUT_DIR, filename, 'toc.txt'), 'w') as file:
-
             dictLevel = SortedDict()
             list_headings = []
 
@@ -141,18 +148,12 @@ class TreeParser:
     def parse_markdown(self, filename, rootNode, recentNodeDict):
         toc_file = None
 
-        if "grade" in filename:
-            toc_file = open(os.path.join(NCERT_TOC_DIR, f"{filename}.txt"), "r")
-        else:
-            toc_file = open(os.path.join(OUTPUT_DIR, filename, "toc.txt"), "r")
+        toc_file = open(os.path.join(OUTPUT_DIR, filename, "toc.txt"), "r")
         toc_line = toc_file.readline()
                 
         currNode = rootNode
-
         tables = []
-
         content = ""
-
         previous_line = ""
 
         with open(os.path.join(OUTPUT_DIR, filename, filename + ".md"), 'r') as markdown_file:
@@ -190,10 +191,8 @@ class TreeParser:
                         currNode.append_content(text_obj)
                         for table in tables:
                             currNode.append_content(table)
-                        # Process OCR images in this folder
                         ocr_texts = self.extract_images_ocr(os.path.join(OUTPUT_DIR, filename))
                         for ocr_obj in ocr_texts:
-                            # You can attach to the root node or current node
                             rootNode.append_content(ocr_obj)
                         tables.clear()
                         content = ""
@@ -243,7 +242,6 @@ class TreeParser:
             return
         
         node.output_node_info()
-
         total = node.get_length_children()
 
         for i in range(total):
@@ -260,7 +258,6 @@ class TreeParser:
             return
         
         data = {}
-
         heading = node.get_heading()
 
         data[heading] = {}
@@ -309,6 +306,7 @@ class TreeParser:
     def get_output_path(self, tree):
         filename = self.get_filename(tree.file)
         return os.path.join(OUTPUT_DIR, filename, "output.txt")
+
     def extract_images_ocr(self, folder_path):
         """
         Extract text from images in the given folder.
