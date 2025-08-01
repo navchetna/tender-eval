@@ -5,22 +5,106 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { 
-  Upload, 
-  FileText, 
   Eye, 
   BarChart3, 
   CheckCircle, 
   Clock, 
-  AlertTriangle,
   Target,
-  DollarSign,
-  Users
+  FolderOpen,
+  Users,
+  Building2,
+  FileText
 } from 'lucide-react';
-import FileUpload from './FileUpload';
+import ProjectSidebar from './ProjectSidebar';
 import DocumentViewer from './DocumentViewer';
 import ComparisonView from './ComparisonView';
+import ProcessingView from './ProcessingView';
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
+
+interface ProjectFile {
+  id: string;
+  name: string;
+  type: 'tender' | 'bid';
+  bidderName?: string;
+  uploadDate: string;
+}
+
+interface Project {
+  id: string;
+  name: string;
+  tenderFile?: ProjectFile;
+  bidFiles: ProjectFile[];
+  createdAt: string;
+  status: 'draft' | 'processing' | 'completed';
+}
 
 // Mock data for demonstration
+const mockProjects: Project[] = [
+  {
+    id: '1',
+    name: 'Highway Infrastructure Project',
+    tenderFile: {
+      id: 't1',
+      name: 'Highway_Tender_2024.pdf',
+      type: 'tender',
+      uploadDate: '2024-01-15'
+    },
+    bidFiles: [
+      {
+        id: 'b1',
+        name: 'ABC_Construction_Bid.pdf',
+        type: 'bid',
+        bidderName: 'ABC Construction Ltd.',
+        uploadDate: '2024-01-20'
+      },
+      {
+        id: 'b2',
+        name: 'XYZ_Infrastructure_Bid.pdf',
+        type: 'bid',
+        bidderName: 'XYZ Infrastructure Co.',
+        uploadDate: '2024-01-22'
+      },
+      {
+        id: 'b3',
+        name: 'BuildTech_Bid.pdf',
+        type: 'bid',
+        bidderName: 'BuildTech Solutions',
+        uploadDate: '2024-01-21'
+      }
+    ],
+    createdAt: '2024-01-15',
+    status: 'completed'
+  },
+  {
+    id: '2',
+    name: 'Water Treatment Plant',
+    tenderFile: {
+      id: 't2',
+      name: 'Water_Plant_Tender.pdf',
+      type: 'tender',
+      uploadDate: '2024-02-01'
+    },
+    bidFiles: [
+      {
+        id: 'b4',
+        name: 'Aqua_Systems_Bid.pdf',
+        type: 'bid',
+        bidderName: 'Aqua Systems Inc.',
+        uploadDate: '2024-02-10'
+      },
+      {
+        id: 'b5',
+        name: 'Clean_Water_Bid.pdf',
+        type: 'bid',
+        bidderName: 'Clean Water Technologies',
+        uploadDate: '2024-02-12'
+      }
+    ],
+    createdAt: '2024-02-01',
+    status: 'processing'
+  }
+];
+
 const mockDocuments = [
   {
     id: '1',
@@ -129,241 +213,329 @@ Key Differentiators:
 Recommendations:
 Award the contract to ABC Construction Ltd. with conditions to address the minor environmental documentation gap within 30 days of contract signing.`;
 
+// Add a mock for processed file stage outputs
+const mockProcessedFileOutputs = [
+  {
+    fileId: 't1',
+    fileName: 'Highway_Tender_2024.pdf',
+    stages: [
+      { id: 1, title: 'Parsing and creating structure', output: 'Parsed structure for Highway_Tender_2024.pdf' },
+      { id: 2, title: 'Finding technical and price compliance from TOC', output: 'Compliance found in TOC.' },
+      { id: 3, title: 'Finding compliance requirements from tree', output: 'Requirements mapped.' },
+      { id: 4, title: 'Converting to dataframes & excel sheets', output: 'Dataframes and Excel generated.' },
+      { id: 5, title: 'Transforming into JSON files', output: 'JSON output created.' },
+    ]
+  },
+  {
+    fileId: 'b1',
+    fileName: 'ABC_Construction_Bid.pdf',
+    stages: [
+      { id: 1, title: 'Parsing and creating structure', output: 'Parsed structure for ABC_Construction_Bid.pdf' },
+      { id: 2, title: 'Finding technical and price compliance from TOC', output: 'Compliance found in TOC.' },
+      { id: 3, title: 'Finding compliance requirements from tree', output: 'Requirements mapped.' },
+      { id: 4, title: 'Converting to dataframes & excel sheets', output: 'Dataframes and Excel generated.' },
+      { id: 5, title: 'Transforming into JSON files', output: 'JSON output created.' },
+    ]
+  }
+];
+
 const Dashboard = () => {
-  const [tenderFiles, setTenderFiles] = useState<File[]>([]);
-  const [bidFiles, setBidFiles] = useState<File[]>([]);
-  const [activeTab, setActiveTab] = useState('upload');
+  const [projects, setProjects] = useState<Project[]>(mockProjects);
+  const [activeProject, setActiveProject] = useState<string | null>('1');
+  const [activeTab, setActiveTab] = useState('documents');
   const [processStep, setProcessStep] = useState(0);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const steps = [
-    'Upload Documents',
-    'Parse & Extract',
+    'Parse Documents',
+    'Extract Tables',
     'Analyze Compliance',
     'Generate Comparison',
     'Review Results'
   ];
 
+  const currentProject = activeProject ? projects.find(p => p.id === activeProject) : null;
+  const totalProjects = projects.length;
+  const totalBidders = projects.reduce((sum, p) => sum + p.bidFiles.length, 0);
+  const completedProjects = projects.filter(p => p.status === 'completed').length;
+
+  const handleProjectCreate = (name: string) => {
+    const newProject: Project = {
+      id: Date.now().toString(),
+      name,
+      bidFiles: [],
+      createdAt: new Date().toISOString(),
+      status: 'draft'
+    };
+    setProjects(prev => [...prev, newProject]);
+    setActiveProject(newProject.id);
+  };
+
+  const handleFileUpload = (projectId: string, files: File[], type: 'tender' | 'bid', bidderName?: string) => {
+    setProjects(prev => prev.map(project => {
+      if (project.id !== projectId) return project;
+      
+      const newFiles: ProjectFile[] = files.map(file => ({
+        id: Date.now().toString() + Math.random(),
+        name: file.name,
+        type,
+        bidderName,
+        uploadDate: new Date().toISOString()
+      }));
+
+      if (type === 'tender') {
+        return { ...project, tenderFile: newFiles[0] };
+      } else {
+        return { ...project, bidFiles: [...project.bidFiles, ...newFiles] };
+      }
+    }));
+  };
+
+  const handleProjectDelete = (projectId: string) => {
+    setProjects(prev => prev.filter(p => p.id !== projectId));
+  };
+
+  const handleFileDelete = (projectId: string, fileId: string, type: 'tender' | 'bid') => {
+    setProjects(prev => prev.map(project => {
+      if (project.id !== projectId) return project;
+      
+      if (type === 'tender') {
+        return { ...project, tenderFile: undefined };
+      } else {
+        return { ...project, bidFiles: project.bidFiles.filter(f => f.id !== fileId) };
+      }
+    }));
+  };
+
   const handleProcess = () => {
     setActiveTab('processing');
-    // Simulate processing steps
-    let step = 0;
-    const interval = setInterval(() => {
-      step++;
-      setProcessStep(step);
-      if (step >= 5) {
-        clearInterval(interval);
-        setTimeout(() => setActiveTab('results'), 1000);
-      }
-    }, 1500);
+  };
+
+  const handleProcessingComplete = () => {
+    setActiveTab('results');
   };
 
   const handleDownload = (docId: string, format: 'excel' | 'json') => {
     console.log(`Downloading ${format} for document ${docId}`);
-    // Implement download logic
   };
 
   const handleGenerateReport = () => {
     console.log('Generating final report');
-    // Implement report generation
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b bg-gradient-to-r from-primary/5 to-accent/5">
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-foreground">TenderEval</h1>
-              <p className="text-muted-foreground mt-1">
-                AI-Powered Tender & Bid Evaluation Platform
-              </p>
-            </div>
-            <div className="flex items-center gap-4">
-              <Badge variant="outline" className="text-sm">
-                <Target className="h-3 w-3 mr-1" />
-                Infrastructure Procurement
-              </Badge>
-              <Button variant="outline">
-                <Users className="h-4 w-4 mr-2" />
-                Admin Panel
-              </Button>
+    <div className="min-h-screen bg-background flex">
+      {/* Project Sidebar */}
+      <ProjectSidebar
+        projects={projects}
+        activeProject={activeProject}
+        onProjectSelect={setActiveProject}
+        onProjectCreate={handleProjectCreate}
+        onFileUpload={handleFileUpload}
+        onProjectDelete={handleProjectDelete}
+        onFileDelete={handleFileDelete}
+        isCollapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+      />
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <div className="border-b bg-gradient-to-r from-primary/5 to-accent/5">
+          <div className="px-6 py-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold text-foreground">TenderEval</h1>
+                <p className="text-muted-foreground mt-1">
+                  {currentProject ? `Project: ${currentProject.name}` : 'AI-Powered Tender & Bid Evaluation Platform'}
+                </p>
+              </div>
+              <div className="flex items-center gap-4">
+                <Badge variant="outline" className="text-sm">
+                  <Target className="h-3 w-3 mr-1" />
+                  Infrastructure Procurement
+                </Badge>
+                <Button variant="outline">
+                  <Users className="h-4 w-4 mr-2" />
+                  Admin Panel
+                </Button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Stats Overview */}
-      <div className="container mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card className="shadow-soft">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary/10 rounded-lg">
-                  <FileText className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">12</p>
-                  <p className="text-sm text-muted-foreground">Documents Processed</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="shadow-soft">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-success/10 rounded-lg">
-                  <CheckCircle className="h-5 w-5 text-success" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">8</p>
-                  <p className="text-sm text-muted-foreground">Compliant Bids</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="shadow-soft">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-warning/10 rounded-lg">
-                  <DollarSign className="h-5 w-5 text-warning" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">$2.4M</p>
-                  <p className="text-sm text-muted-foreground">Avg. Bid Value</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="shadow-soft">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-info/10 rounded-lg">
-                  <BarChart3 className="h-5 w-5 text-info" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">94%</p>
-                  <p className="text-sm text-muted-foreground">Processing Accuracy</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Main Content */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-8">
-            <TabsTrigger value="upload">
-              <Upload className="h-4 w-4 mr-2" />
-              Upload
-            </TabsTrigger>
-            <TabsTrigger value="documents">
-              <Eye className="h-4 w-4 mr-2" />
-              Documents
-            </TabsTrigger>
-            <TabsTrigger value="processing" disabled={activeTab !== 'processing'}>
-              <Clock className="h-4 w-4 mr-2" />
-              Processing
-            </TabsTrigger>
-            <TabsTrigger value="results" disabled={activeTab !== 'results'}>
-              <BarChart3 className="h-4 w-4 mr-2" />
-              Results
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="upload" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <FileUpload
-                title="Upload Tender Documents"
-                description="Upload the main tender document containing requirements and specifications"
-                onFilesChange={setTenderFiles}
-                files={tenderFiles}
-                multiple={false}
-              />
-              <FileUpload
-                title="Upload Bid Documents"
-                description="Upload bid responses from different vendors for evaluation"
-                onFilesChange={setBidFiles}
-                files={bidFiles}
-                multiple={true}
-              />
-            </div>
-            
-            {(tenderFiles.length > 0 || bidFiles.length > 0) && (
-              <Card className="shadow-medium">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold mb-2">Ready to Process</h3>
-                      <p className="text-muted-foreground">
-                        {tenderFiles.length} tender document(s) and {bidFiles.length} bid document(s) uploaded
-                      </p>
-                    </div>
-                    <Button 
-                      onClick={handleProcess}
-                      className="shadow-soft"
-                      disabled={tenderFiles.length === 0 && bidFiles.length === 0}
-                    >
-                      Start Processing
-                    </Button>
+        {/* Stats Overview */}
+        <div className="px-6 py-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <Card className="shadow-soft">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-primary/10 rounded-lg">
+                    <FolderOpen className="h-5 w-5 text-primary" />
                   </div>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-
-          <TabsContent value="documents" className="space-y-6">
-            <DocumentViewer documents={mockDocuments} onDownload={handleDownload} />
-          </TabsContent>
-
-          <TabsContent value="processing" className="space-y-6">
-            <Card className="shadow-medium">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-primary animate-spin" />
-                  Processing Documents
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  {steps.map((step, index) => (
-                    <div key={index} className="flex items-center gap-4">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                        index < processStep ? 'bg-success text-success-foreground' :
-                        index === processStep ? 'bg-primary text-primary-foreground' :
-                        'bg-muted text-muted-foreground'
-                      }`}>
-                        {index < processStep ? <CheckCircle className="h-4 w-4" /> : index + 1}
-                      </div>
-                      <div className="flex-1">
-                        <p className={`font-medium ${
-                          index <= processStep ? 'text-foreground' : 'text-muted-foreground'
-                        }`}>
-                          {step}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                  <div>
+                    <p className="text-2xl font-bold">{totalProjects}</p>
+                    <p className="text-sm text-muted-foreground">Total Projects</p>
+                  </div>
                 </div>
-                <Progress value={(processStep / steps.length) * 100} className="w-full" />
-                <p className="text-center text-muted-foreground">
-                  {processStep < steps.length ? 
-                    `Processing step ${processStep + 1} of ${steps.length}...` : 
-                    'Processing complete!'
-                  }
-                </p>
               </CardContent>
             </Card>
-          </TabsContent>
+            <Card className="shadow-soft">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-success/10 rounded-lg">
+                    <CheckCircle className="h-5 w-5 text-success" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{completedProjects}</p>
+                    <p className="text-sm text-muted-foreground">Completed Projects</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="shadow-soft">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-warning/10 rounded-lg">
+                    <Users className="h-5 w-5 text-warning" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{totalBidders}</p>
+                    <p className="text-sm text-muted-foreground">Total Bidders</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="shadow-soft">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-info/10 rounded-lg">
+                    <Building2 className="h-5 w-5 text-info" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{currentProject?.bidFiles.length || 0}</p>
+                    <p className="text-sm text-muted-foreground">Current Project Bidders</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
-          <TabsContent value="results" className="space-y-6">
-            <ComparisonView
-              comparisons={mockComparisons}
-              explanation={mockExplanation}
-              onGenerateReport={handleGenerateReport}
-            />
-          </TabsContent>
-        </Tabs>
+          {/* Main Content Tabs */}
+          {currentProject && (
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="grid w-full grid-cols-3 mb-8">
+                <TabsTrigger value="documents">
+                  <Eye className="h-4 w-4 mr-2" />
+                  Documents
+                </TabsTrigger>
+                <TabsTrigger value="processing" disabled={activeTab !== 'processing'}>
+                  <Clock className="h-4 w-4 mr-2" />
+                  Processing
+                </TabsTrigger>
+                <TabsTrigger value="results" disabled={activeTab !== 'results'}>
+                  <BarChart3 className="h-4 w-4 mr-2" />
+                  Results
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="documents" className="space-y-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold">Project Documents</h3>
+                  {currentProject.tenderFile && currentProject.bidFiles.length > 0 && (
+                    <Button onClick={handleProcess} className="shadow-soft">
+                      Start Processing
+                    </Button>
+                  )}
+                </div>
+                {/* Accordion for processed files */}
+                <Accordion type="multiple" className="mb-6">
+                  {mockProcessedFileOutputs.map(file => (
+                    <AccordionItem key={file.fileId} value={file.fileId}>
+                      <AccordionTrigger>
+                        <span className="font-medium">{file.fileName}</span>
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <div className="space-y-2">
+                          {file.stages.map(stage => (
+                            <div key={stage.id} className="p-2 bg-muted/40 rounded">
+                              <strong>{stage.title}:</strong>
+                              <div className="mt-1 text-sm">{stage.output}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+                {/* Simple Documents List */}
+                <div className="space-y-4">
+                  {currentProject.tenderFile && (
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                          <FileText className="h-5 w-5 text-green-600" />
+                          <div className="flex-1">
+                            <div className="font-medium">{currentProject.tenderFile.name}</div>
+                            <div className="text-sm text-muted-foreground">
+                              Uploaded on {new Date(currentProject.tenderFile.uploadDate).toLocaleDateString()}
+                            </div>
+                          </div>
+                          <Badge variant="secondary">Tender</Badge>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                  
+                  {currentProject.bidFiles.map((file) => (
+                    <Card key={file.id}>
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                          <FileText className="h-5 w-5 text-orange-600" />
+                          <div className="flex-1">
+                            <div className="font-medium">{file.name}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {file.bidderName} • Uploaded on {new Date(file.uploadDate).toLocaleDateString()}
+                            </div>
+                          </div>
+                          <Badge variant="outline">Bid</Badge>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="processing" className="space-y-6">
+                <ProcessingView 
+                  files={[
+                    ...(currentProject.tenderFile ? [currentProject.tenderFile] : []),
+                    ...currentProject.bidFiles
+                  ]}
+                  onProcessingComplete={handleProcessingComplete}
+                />
+              </TabsContent>
+
+              <TabsContent value="results" className="space-y-6">
+                <ComparisonView
+                  comparisons={mockComparisons}
+                  explanation={mockExplanation}
+                  onGenerateReport={handleGenerateReport}
+                />
+              </TabsContent>
+            </Tabs>
+          )}
+
+          {!currentProject && (
+            <div className="text-center py-12">
+              <FolderOpen className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No Project Selected</h3>
+              <p className="text-muted-foreground">
+                Select a project from the sidebar or create a new one to get started.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
