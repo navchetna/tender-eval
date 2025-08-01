@@ -41,21 +41,21 @@ def excel_to_price_compliance_json(
 
     return nested
 
-def main():
-    excel_file = '/home/ritik-intel/Ervin/tender-eval/comps/6._Price_Bid_Submission_(Ref:_Annexure1,_Section1.4).xlsx'
-    output_file = '/home/ritik-intel/Ervin/price_response.json'
+# def main():
+#     excel_file = '/home/ritik-intel/Ervin/tender-eval/comps/6._Price_Bid_Submission_(Ref:_Annexure1,_Section1.4).xlsx'
+#     output_file = '/home/ritik-intel/Ervin/price_response.json'
     
-    json_data = excel_to_nested_json(
-        excel_file,
-        sheet_name=0,
-        root_key='Price Compliance'
-    )
+#     json_data = excel_to_nested_json(
+#         excel_file,
+#         sheet_name=0,
+#         root_key='Price Compliance'
+#     )
 
-    with open(output_file, 'w') as fh:
-        json.dump(json_data, fh, indent=4)
+#     with open(output_file, 'w') as fh:
+#         json.dump(json_data, fh, indent=4)
 
-    print(json.dumps(json_data, indent=4))
-    print(f"\nJSON data has been written to: {output_file}")
+#     print(json.dumps(json_data, indent=4))
+#     print(f"\nJSON data has been written to: {output_file}")
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()

@@ -16,18 +16,18 @@ def excel_to_technical_compliance_json(excel_file):
 
 # print(json.dumps(result, indent=4))
 
-def main():
-    excel_file = '/home/ritik-intel/Ervin/tender-eval/comps/3._Response_to_Technical_Requirements_(Ref:_Annexure1,_Section1.2.2).xlsx'
-    output_file = '/home/ritik-intel/Ervin/tender-eval/comps/technical_response.json'
+# def main():
+#     excel_file = '/home/ritik-intel/Ervin/tender-eval/comps/3._Response_to_Technical_Requirements_(Ref:_Annexure1,_Section1.2.2).xlsx'
+#     output_file = '/home/ritik-intel/Ervin/tender-eval/comps/technical_response.json'
     
-    json_data = excel_to_technical_compliance_json(excel_file)
+#     json_data = excel_to_technical_compliance_json(excel_file)
 
-    with open(output_file, 'w') as fh:
-        json.dump(json_data, fh, indent=4)
+#     with open(output_file, 'w') as fh:
+#         json.dump(json_data, fh, indent=4)
 
-    print(json.dumps(json_data, indent=4))
-    print(f"\nJSON data has been written to: {output_file}")
+#     print(json.dumps(json_data, indent=4))
+#     print(f"\nJSON data has been written to: {output_file}")
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
 
