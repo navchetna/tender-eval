@@ -1,10 +1,8 @@
 import os
-import re
 import json
-import shutil
 from typing import List, Dict, Optional
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Request
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -13,6 +11,7 @@ import uvicorn
 import pandas as pd
 import io
 
+from groq import Groq
 from dotenv import load_dotenv
 import motor.motor_asyncio
 
@@ -111,19 +110,69 @@ def fuzzy_matches(heading, query):
     return score >= 90
 
 def find_node_by_level_or_title(rootNode, query):
+    print(rootNode.get_length_children())
+    print("Searching for:", query)
+    
     if fuzzy_matches(rootNode.get_heading(), query):
+        print(f"High score for '{rootNode.get_heading().strip()}' with '{query.strip()}'!\n")
         return rootNode
+
     for i in range(rootNode.get_length_children()):
         result = find_node_by_level_or_title(rootNode.get_child(i), query)
         if result:
             return result
+
+    return None
+
+def traverse_json_tree(json_node, query):
+    """
+    Recursively search for a node in the JSON structure whose key/heading matches the query.
+    Returns (heading, node_dict) if found, else None.
+    """
+    if isinstance(json_node, dict):
+        for key in json_node:
+            if isinstance(json_node[key], dict):
+                heading = key
+                # print("Heading:", heading)
+                # print("Query:", query)
+                # print("Score:", fuzzy_matches(heading, query))
+                print()
+                if fuzzy_matches(heading, query):
+                    return heading, json_node[key]
+                children = json_node[key].get("children", [])
+                for child in children:
+                    # Each child is a dict
+                    result = traverse_json_tree(child, query)
+                    if result is not None:
+                        return result
+            # fallback if this is just the root
+            elif key == "children":
+                for child in json_node[key]:
+                    result = traverse_json_tree(child, query)
+                    if result is not None:
+                        return result
+    return None
+
+def find_markdown_in_json_section(section_dict):
+    """
+    Given a node dict (with key "content"), try to return the markdown block (first string or any string).
+    """
+    if not section_dict:
+        return None
+    contents = section_dict.get("content", [])
+    for item in contents:
+        if isinstance(item, str):
+            return item
     return None
 
 def retrieve_from_pdf(target_node):
     if target_node:
+        print("Found Node:", target_node.get_heading())
         for item in target_node.get_content():
             if hasattr(item, "markdown_content"):
                 return item.markdown_content
+    else:
+        print(" No table/ Node found not found")
     return None
 
 def markdown_to_df(markdown_content, section_title):
@@ -135,6 +184,22 @@ def markdown_to_df(markdown_content, section_title):
     df = df.drop(df.columns[[0, -1]], axis=1)
     df.columns = [col.strip() for col in df.columns]
     return df
+
+def extract_markdown_table_from_list(markdown_list):
+    """
+    Given the 'markdown' field (a list), extract the markdown table string.
+    Return the table string, or None.
+    """
+    if not isinstance(markdown_list, list):
+        return None
+    for element in markdown_list:
+        if isinstance(element, str) and element.strip().startswith('|'):
+            return element
+        if isinstance(element, dict):
+            for subelement in element.get("content", []):
+                if isinstance(subelement, str) and subelement.strip().startswith('|'):
+                    return subelement
+    return None
 
 def combine_price_and_tech_json(json_dir_path, output_filename="combined.json"):
     combined_data = {
@@ -168,7 +233,7 @@ def stage_parse_pdf(pdf_bytes_path, output_path):
     return tree
 
 def stage_extract_toc(tree, pdf_output_dir):
-    toc_path = os.path.join(pdf_output_dir, 'toc.txt')
+    toc_path = os.path.join("/home/ritik-intel/Ervin/tender-eval/comps/out/control-center-bid-separated", 'toc.txt')
     with open(toc_path, 'r', encoding='utf-8') as f:
         toc_content = f.read()
     return toc_content
@@ -180,11 +245,12 @@ def stage_select_compliance_sections(toc_content, ask_groq_function):
 
 def stage_extract_section_nodes(tree, compliance_sections):
     extracted = {}
-    for sec_type, sec_title in compliance_sections.items():
-        node = find_node_by_level_or_title(tree.rootNode, sec_title)
+    for section_type, section_title in compliance_sections.items():
+        section_title = section_title[2:] if section_title else None
+        node = find_node_by_level_or_title(tree.rootNode, section_title)
         markdown = retrieve_from_pdf(node)
-        extracted[sec_type] = {
-            "section_title": sec_title,
+        extracted[section_type] = {
+            "section_title": section_title,
             "markdown": markdown
         }
     return extracted
@@ -221,15 +287,12 @@ def stage_transform_to_json(pdf_output_dir, excel_paths):
             json.dump(compliance_json, fh, indent=4)
         json_outputs[k] = json_path
     combined_path = combine_price_and_tech_json(json_dir)
+    json_outputs["combined"] = combined_path
     return json_outputs
 
-# --------------- Ask Groq: Proxy function. You can keep your existing -----------------
+# --------------- Ask Groq to identify compliance sections -----------------
 def ask_groq_with_file_content(toc_content):
-    # Use your existing LLM call as before, e.g., with groq sdk
-    # Supports both file_path or direct toc_content strings
-    # Return just the LLM JSON result as a string
-    from groq import Groq
-    client = Groq(api_key="")
+    client = Groq(api_key="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")
     system_prompt = """
         You are an information extraction API that identifies the most relevant sections from a tender document's Table of Contents (TOC) for technical and price compliance.
         
@@ -320,9 +383,6 @@ async def get_pipeline_stages():
 
 @app.post("/projects/{project_id}/pdfs/{pdf_id}/stage/{stage_id}")
 async def run_pipeline_stage(project_id: str, pdf_id: str, stage_id: int, request: Request):
-    # Load the latest available state, operate on it, and return output
-    # For large data like markdown tables, you may want to trim or send links for download
-
     # 0: fetch PDF from Mongo to disk so parser can handle it
     filename, pdf_bytes = await get_pdf_bytes(pdf_id)
     output_dir = pdf_output_dir(project_id, pdf_id)
@@ -343,27 +403,43 @@ async def run_pipeline_stage(project_id: str, pdf_id: str, stage_id: int, reques
         auto_suggested = stage_select_compliance_sections(toc_content, ask_groq_with_file_content)
         return {"toc": toc_content, "auto_compliance_sections": auto_suggested}
 
-    # Stage 3: (UI can pass `compliance_sections` for manual override, else run using suggested)
     elif stage_id == 3:
         data = await request.json()
         compliance_sections = data.get("compliance_sections")
         if not compliance_sections:
             raise HTTPException(400, "Missing compliance_sections")
-        tree = Tree(pdf_path)
-        extracted = stage_extract_section_nodes(tree, compliance_sections)
-        # return raw markdown/tables for UI display
-        return extracted
+        
+        # To do: make the output path dynamic
+        output_json_path = os.path.join("/home/ritik-intel/Ervin/tender-eval/comps/out/control-center-bid-separated", "output.json")
+        if not os.path.exists(output_json_path):
+            raise HTTPException(404, f"output.json not found at {output_json_path}")
+        with open(output_json_path, "r", encoding="utf-8") as f:
+            tree_json = json.load(f)
+        root_node = tree_json.get("root", {})
 
-    # Stage 4: Export extracted sections to DataFrames and save Excel files
+        extracted = {}
+        for section_type, section_title in compliance_sections.items():
+            # Remove index/numbering (if needed), or leave as is for matching
+            section_heading = section_title[2:] if section_title and section_title[1] == '.' else section_title
+            found = traverse_json_tree(root_node, section_heading)
+            print("Found:", found)
+            extracted[section_type] = {
+                "section_title": section_heading,
+                "markdown": found if found else None,
+                "full_heading": found[0] if found else None
+            }
+        return extracted
+    
     elif stage_id == 4:
-        data = await request.json()
-        extracted = data.get("extracted")
+        extracted = await request.json()
         dfs = {}
-        # For each k: {section_title, markdown}
+
         for k, v in extracted.items():
-            if v["markdown"]:
-                df = markdown_to_df(v["markdown"], v["section_title"])
+            markdown_content = extract_markdown_table_from_list(v.get('markdown'))
+            if markdown_content:
+                df = markdown_to_df(markdown_content, v['section_title'])
                 dfs[k] = df
+
         excel_paths = stage_save_excel_files(output_dir, dfs)
         return {"excel_paths": excel_paths}
 
