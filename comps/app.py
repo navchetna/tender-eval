@@ -229,7 +229,7 @@ def ask_groq_with_file_content(toc_content):
     # Supports both file_path or direct toc_content strings
     # Return just the LLM JSON result as a string
     from groq import Groq
-    client = Groq(api_key="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")
+    client = Groq(api_key="")
     system_prompt = """
         You are an information extraction API that identifies the most relevant sections from a tender document's Table of Contents (TOC) for technical and price compliance.
         
