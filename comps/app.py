@@ -24,10 +24,14 @@ from comps.dataprep.excel_to_json_tech import excel_to_technical_compliance_json
 
 # ------------ CONFIG & INIT -----------------
 load_dotenv()
-MONGO_URI = 'mongodb://localhost:27100'
+MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://localhost:27100')
 DB_NAME = os.environ.get('DB_NAME', 'tender_eval')
-OUTPUT_DIR = 'tender-eval-outputs'
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+# OUTPUT_DIR = 'out'
+# os.makedirs(OUTPUT_DIR, exist_ok=True)
+BASE_OUTPUT_DIR = "out"
+
+def get_pdf_output_dir(project_id, pdf_id):
+    return os.path.join(BASE_OUTPUT_DIR, str(project_id), str(pdf_id))
 
 # --------- FastAPI and CORS (for local dev) -----------
 app = FastAPI()
@@ -72,7 +76,7 @@ def parse_pdf_pipeline_stages():
     ]
 
 def pdf_output_dir(project_id, pdf_id):
-    return os.path.join(OUTPUT_DIR, project_id, pdf_id)
+    return get_pdf_output_dir(project_id, pdf_id)
 
 async def save_pdf_in_db(project_id, filename, bytes_data):
     doc = {
@@ -224,16 +228,16 @@ def combine_price_and_tech_json(json_dir_path, output_filename="combined.json"):
 
 # --------------- Stage Functions (as previously modularized, but sync for backend CLI) ---------------
 
-def stage_parse_pdf(pdf_bytes_path, output_path):
+def stage_parse_pdf(pdf_bytes_path, output_dir):
     tree = Tree(pdf_bytes_path)
-    parser = TreeParser()
+    parser = TreeParser(output_dir)
     parser.populate_tree(tree)
     parser.generate_output_text(tree)
     parser.generate_output_json(tree)
     return tree
 
-def stage_extract_toc(tree, pdf_output_dir):
-    toc_path = os.path.join("/home/ritik-intel/Ervin/tender-eval/comps/out/control-center-bid-separated", 'toc.txt')
+def stage_extract_toc(tree, output_dir):
+    toc_path = os.path.join(output_dir, 'toc.txt')
     with open(toc_path, 'r', encoding='utf-8') as f:
         toc_content = f.read()
     return toc_content
@@ -392,6 +396,7 @@ async def run_pipeline_stage(project_id: str, pdf_id: str, stage_id: int, reques
 
     # Stage 1: Parse and create structure
     if stage_id == 1:
+        
         tree = stage_parse_pdf(pdf_path, output_dir)
         return {"status": "parsed", "output_dir": output_dir}
 
@@ -410,7 +415,8 @@ async def run_pipeline_stage(project_id: str, pdf_id: str, stage_id: int, reques
             raise HTTPException(400, "Missing compliance_sections")
         
         # To do: make the output path dynamic
-        output_json_path = os.path.join("/home/ritik-intel/Ervin/tender-eval/comps/out/control-center-bid-separated", "output.json")
+        output_dir = get_pdf_output_dir(project_id, pdf_id)
+        output_json_path = os.path.join(output_dir, "output.json")
         if not os.path.exists(output_json_path):
             raise HTTPException(404, f"output.json not found at {output_json_path}")
         with open(output_json_path, "r", encoding="utf-8") as f:
@@ -422,7 +428,7 @@ async def run_pipeline_stage(project_id: str, pdf_id: str, stage_id: int, reques
             # Remove index/numbering (if needed), or leave as is for matching
             section_heading = section_title[2:] if section_title and section_title[1] == '.' else section_title
             found = traverse_json_tree(root_node, section_heading)
-            print("Found:", found)
+            # print("Found:", found)
             extracted[section_type] = {
                 "section_title": section_heading,
                 "markdown": found if found else None,

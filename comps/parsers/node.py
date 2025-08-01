@@ -37,6 +37,7 @@ class Node:
         return self.__children[pos]
     
     def output_node_info(self):
+        os.makedirs(self.__dir, exist_ok=True)
         with open(os.path.join(self.__dir, "output.txt"), "a") as f:
             f.write(self.__heading + "\n")
             for item in self.__content:

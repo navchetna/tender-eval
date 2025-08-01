@@ -26,19 +26,20 @@ NCERT_TOC_DIR = "../parsers/ncert_toc"
 logger = CustomLogger("treeparser")
 
 class TreeParser:
-    def __init__(self):
-        mkdirIfNotExists(OUTPUT_DIR)
+    def __init__(self, output_dir):
+        self.output_dir = output_dir
+        mkdirIfNotExists(self.output_dir)
 
     def get_filename(self, file):
         return os.path.splitext(os.path.basename(file))[0]
 
     def generate_markdown(self, file, filename):
-        if not output_exists(os.path.join(OUTPUT_DIR, filename), filename):
+        if not output_exists(self.output_dir, filename):
             config = {
                 "output_format": "markdown",
                 "use_llm": True,
                 "llm_service": "marker.services.openai.OpenAIService",
-                "OpenAIService_openai_base_url": "http://localhost:8000/v1",
+                "OpenAIService_openai_base_url": "http://localhost:8010/v1",
                 "OpenAIService_openai_model": "Qwen/Qwen2.5-VL-7B-Instruct",
                 "openai_api_key": os.environ.get("OPENAI_API_KEY", "DUMMY_KEY"),
                 "format_lines": True,
@@ -50,8 +51,8 @@ class TreeParser:
                 config=config
             )
             rendered = converter(file)
-            os.mkdir(os.path.join(OUTPUT_DIR, filename))
-            save_output(rendered, os.path.join(OUTPUT_DIR, filename), filename)
+            # os.mkdir(os.path.join(self.output_dir, filename))
+            save_output(rendered, self.output_dir, filename)
 
             logger.info("Output generated (PDF-Marker)")
 
@@ -62,8 +63,8 @@ class TreeParser:
                 return True
         return False
     
-    def generate_toc_using_level(self, filename, headings):
-        with open(os.path.join(OUTPUT_DIR, filename, 'toc.txt'), 'w') as file_toc:
+    def generate_toc_using_level(self, headings):
+        with open(os.path.join(self.output_dir, 'toc.txt'), 'w') as file_toc:
 
             level_pattern = re.compile(r'^\d+(\.\d+)*\.?\s')
 
@@ -74,8 +75,8 @@ class TreeParser:
                     level = heading_number.count(".") + 1
                     file_toc.write(f"{level};{heading['title']}\n")
 
-    def generate_toc_using_size(self, filename, headings):
-        with open(os.path.join(OUTPUT_DIR, filename, 'toc.txt'), 'w') as file:
+    def generate_toc_using_size(self, headings):
+        with open(os.path.join(self.output_dir, 'toc.txt'), 'w') as file:
             dictLevel = SortedDict()
             list_headings = []
 
@@ -111,19 +112,19 @@ class TreeParser:
                 file.write(f"{i[1]};{i[2]};;;\n")
 
     def generate_toc_no_outline(self, filename):
-        with open(os.path.join(OUTPUT_DIR, filename, filename + "_meta.json"), 'r') as file_meta:
+        with open(os.path.join(self.output_dir, filename + "_meta.json"), 'r') as file_meta:
             data = json.load(file_meta)
 
         headings = data['table_of_contents']
         if self.detect_level(headings):
-            self.generate_toc_using_level(filename, headings)
+            self.generate_toc_using_level( headings)
         else:
-            self.generate_toc_using_size(filename, headings)        
+            self.generate_toc_using_size(headings)        
     
     def generate_toc(self, file, filename):
         if "grade" in filename:
             return
-        with open(os.path.join(OUTPUT_DIR, filename, 'toc.txt'), 'w') as file_toc:
+        with open(os.path.join(self.output_dir, 'toc.txt'), 'w') as file_toc:
             with open(file, "rb") as fp:
                 try:
                     parser = PDFParser(fp)
@@ -148,7 +149,7 @@ class TreeParser:
     def parse_markdown(self, filename, rootNode, recentNodeDict):
         toc_file = None
 
-        toc_file = open(os.path.join(OUTPUT_DIR, filename, "toc.txt"), "r")
+        toc_file = open(os.path.join(self.output_dir, "toc.txt"), "r")
         toc_line = toc_file.readline()
                 
         currNode = rootNode
@@ -156,7 +157,7 @@ class TreeParser:
         content = ""
         previous_line = ""
 
-        with open(os.path.join(OUTPUT_DIR, filename, filename + ".md"), 'r') as markdown_file:
+        with open(os.path.join(self.output_dir, filename + ".md"), 'r') as markdown_file:
             line = markdown_file.readline()
             while line:
                 line = re.sub(r'<span[^>]*?\/?>(</span>)?', '', line)
@@ -174,7 +175,7 @@ class TreeParser:
                         toc_line = toc_file.readline()
                         level, heading_toc = toc_line.split(";")
                     elif SequenceMatcher(None, heading.lower(), heading_toc.lower()).ratio() > 0.6:
-                        node = Node(level, heading, os.path.join(OUTPUT_DIR, filename))
+                        node = Node(level, heading, self.output_dir)
                         if level > currNode.get_level():
                             currNode.append_child(node)
                             node.set_parent(currNode)
@@ -191,7 +192,7 @@ class TreeParser:
                         currNode.append_content(text_obj)
                         for table in tables:
                             currNode.append_content(table)
-                        ocr_texts = self.extract_images_ocr(os.path.join(OUTPUT_DIR, filename))
+                        ocr_texts = self.extract_images_ocr(self.output_dir)
                         for ocr_obj in ocr_texts:
                             rootNode.append_content(ocr_obj)
                         tables.clear()
@@ -249,7 +250,7 @@ class TreeParser:
         
     def generate_output_text(self, tree):
         filename = self.get_filename(tree.file)
-        with open(os.path.join(OUTPUT_DIR, filename, "output.txt"), "w") as f:
+        with open(os.path.join(self.output_dir, "output.txt"), "w") as f:
             f.write("")
         self.traverse_tree_text(tree.rootNode)
 
@@ -288,7 +289,7 @@ class TreeParser:
         data = self.traverse_tree_json(tree.rootNode)
         filename = self.get_filename(tree.file)
 
-        with open(os.path.join(OUTPUT_DIR, filename, "output.json"), "w") as outfile: 
+        with open(os.path.join(self.output_dir, "output.json"), "w") as outfile: 
             json.dump(data, outfile)
 
     def populate_tree(self, tree):
@@ -303,9 +304,9 @@ class TreeParser:
 
         self.parse_markdown(filename, rootNode, recentNodeDict)
     
-    def get_output_path(self, tree):
-        filename = self.get_filename(tree.file)
-        return os.path.join(OUTPUT_DIR, filename, "output.txt")
+    # def get_output_path(self, tree):
+    #     # filename = self.get_filename(tree.file)
+    #     return os.path.join(self.output_dir, "output.txt")
 
     def extract_images_ocr(self, folder_path):
         """
