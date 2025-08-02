@@ -10,7 +10,7 @@ from bson import ObjectId
 import uvicorn
 import pandas as pd
 import io
-import shutil  # Added for directory deletion
+import shutil
 from datetime import datetime
 
 from groq import Groq
@@ -113,7 +113,7 @@ def save_bytes_to_disk(path, bytes_data):
 def fuzzy_matches(heading, query):
     from fuzzywuzzy import fuzz
     score = fuzz.ratio(heading.strip().lower(), query.strip().lower())
-    return score >= 90
+    return score >= 80
 
 def find_node_by_level_or_title(rootNode, query):
     print(rootNode.get_length_children())
@@ -191,17 +191,22 @@ def markdown_to_df(markdown_content, section_title):
 def extract_markdown_table_from_list(markdown_list):
     """
     Given the 'markdown' field (a list), extract the markdown table string.
+    Pattern: The list typically has [title_string, {content: [text, table_string], children: []}].
+    Extract the table_string from content[1] if it starts with '|'.
     Return the table string, or None.
     """
-    if not isinstance(markdown_list, list):
+    print("Extracting markdown table from list:", markdown_list)
+    if not isinstance(markdown_list, list) or len(markdown_list) < 2:
         return None
-    for element in markdown_list:
-        if isinstance(element, str) and element.strip().startswith('|'):
-            return element
-        if isinstance(element, dict):
-            for subelement in element.get("content", []):
-                if isinstance(subelement, str) and subelement.strip().startswith('|'):
-                    return subelement
+    second_element = markdown_list[1]
+    if not isinstance(second_element, dict):
+        return None
+    content = second_element.get("content", [])
+    if not isinstance(content, list) or len(content) < 2:
+        return None
+    potential_table = content[1]
+    if isinstance(potential_table, str) and potential_table.strip().startswith('|'):
+        return potential_table
     return None
 
 def combine_price_and_tech_json(json_dir_path, output_filename="combined.json"):
@@ -417,6 +422,14 @@ async def download_pdf(project_id: str, pdf_id: str):
     save_bytes_to_disk(temp_path, pdf_bytes)
     return FileResponse(temp_path, media_type='application/pdf', filename=filename)
 
+@app.get("/projects/{project_id}/pdfs/{pdf_id}/excel/{filename}")
+async def get_excel_file(project_id: str, pdf_id: str, filename: str):
+    base_dir = "out"  # Adjust if your BASE_OUTPUT_DIR is different
+    file_path = os.path.join(base_dir, project_id, pdf_id, "excel", filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(file_path, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename=filename)
+
 @app.get("/projects/{project_id}/details")
 async def get_project_details(project_id: str = Path(..., description="The ID of the project to retrieve")):
     # Fetch project
@@ -513,20 +526,44 @@ async def run_pipeline_stage(project_id: str, pdf_id: str, stage_id: int, reques
                 "full_heading": found[0] if found else None
             }
         return extracted
-    
+ 
     elif stage_id == 4:
-        extracted = await request.json()
+        try:
+            body_bytes = await request.body()
+            if not body_bytes:
+                raise HTTPException(status_code=400, detail="Empty request body - JSON data is required for stage 4")
+            extracted = json.loads(body_bytes.decode('utf-8'))
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Invalid JSON in request body - please provide valid JSON data")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Unexpected error processing request: {str(e)}")
+
+
         dfs = {}
+        extracted = extracted.get("compliance_sections", {})
+        print("Extracted sections:", len(extracted))
+
 
         for k, v in extracted.items():
+            # print(f"Processing section: {k} with title: {v}")
             markdown_content = extract_markdown_table_from_list(v.get('markdown'))
             if markdown_content:
                 df = markdown_to_df(markdown_content, v['section_title'])
                 dfs[k] = df
 
-        excel_paths = stage_save_excel_files(output_dir, dfs)
-        return {"excel_paths": excel_paths}
 
+        excel_paths = stage_save_excel_files(output_dir, dfs)
+        print("Excel paths:", excel_paths)
+        
+        # Return filenames (or full URLs) for UI to fetch and display
+        excel_files = {}
+        for key, path in excel_paths.items():
+            filename = os.path.basename(path)  # e.g., "technical.xlsx"
+            # Optionally, construct full URL for direct access
+            file_url = f"http://localhost:8000/projects/{project_id}/pdfs/{pdf_id}/excel/{filename}"
+            excel_files[key] = {"filename": filename, "url": file_url}
+        
+        return {"excel_files": excel_files}
     # Stage 5: Transform compliance excels to json
     elif stage_id == 5:
         excel_dir = os.path.join(output_dir, 'excel')
