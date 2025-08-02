@@ -2,14 +2,16 @@ import os
 import json
 from typing import List, Dict, Optional
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Path
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from bson import ObjectId
 import uvicorn
 import pandas as pd
 import io
+import shutil  # Added for directory deletion
+from datetime import datetime
 
 from groq import Groq
 from dotenv import load_dotenv
@@ -26,8 +28,6 @@ from comps.dataprep.excel_to_json_tech import excel_to_technical_compliance_json
 load_dotenv()
 MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://localhost:27100')
 DB_NAME = os.environ.get('DB_NAME', 'tender_eval')
-# OUTPUT_DIR = 'out'
-# os.makedirs(OUTPUT_DIR, exist_ok=True)
 BASE_OUTPUT_DIR = "out"
 
 def get_pdf_output_dir(project_id, pdf_id):
@@ -78,11 +78,13 @@ def parse_pdf_pipeline_stages():
 def pdf_output_dir(project_id, pdf_id):
     return get_pdf_output_dir(project_id, pdf_id)
 
-async def save_pdf_in_db(project_id, filename, bytes_data):
+async def save_pdf_in_db(project_id, filename, bytes_data, pdf_type: str = "bid"):
     doc = {
         "project_id": project_id,
         "filename": filename,
         "data": bytes_data,
+        "type": pdf_type,  # Add type field: 'tender' or 'bid'
+        "uploadDate": datetime.now().isoformat()  # Add upload date
     }
     result = await pdfs_coll.insert_one(doc)
     return str(result.inserted_id)
@@ -137,9 +139,6 @@ def traverse_json_tree(json_node, query):
         for key in json_node:
             if isinstance(json_node[key], dict):
                 heading = key
-                # print("Heading:", heading)
-                # print("Query:", query)
-                # print("Score:", fuzzy_matches(heading, query))
                 print()
                 if fuzzy_matches(heading, query):
                     return heading, json_node[key]
@@ -323,14 +322,13 @@ def ask_groq_with_file_content(toc_content):
         model="meta-llama/llama-4-scout-17b-16e-instruct",
         messages=[
             {
-               
-                    "role": "system",
-                    "content": system_prompt,
-                },
-                {
-                    "role": "user",
-                    "content": toc_content
-                }
+                "role": "system",
+                "content": system_prompt,
+            },
+            {
+                "role": "user",
+                "content": toc_content
+            }
         ],
         response_format={"type": "json_object"}
     )
@@ -361,10 +359,36 @@ async def create_project(req: ProjectCreateReq):
     result = await projects_coll.insert_one(doc)
     return ProjectOut(id=str(result.inserted_id), name=req.name, description=req.description, pdfs=[])
 
+@app.delete("/projects/{project_id}")
+async def delete_project(project_id: str):
+    # Delete the project from MongoDB
+    delete_result = await projects_coll.delete_one({"_id": ObjectId(project_id)})
+    if delete_result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Delete all associated PDFs from MongoDB
+    await pdfs_coll.delete_many({"project_id": project_id})
+    
+    # Delete the output directory if it exists
+    project_output_dir = os.path.join(BASE_OUTPUT_DIR, project_id)
+    if os.path.exists(project_output_dir):
+        shutil.rmtree(project_output_dir)
+    
+    return {"detail": "Project deleted successfully"}
+
 @app.post("/projects/{project_id}/pdfs", response_model=PDFMetadataOut)
-async def upload_pdf(project_id: str, file: UploadFile = File(...)):
+async def upload_pdf(project_id: str, file: UploadFile = File(...), pdf_type: Optional[str] = "bid"):
     bytes_data = await file.read()
-    pdf_id = await save_pdf_in_db(project_id, file.filename, bytes_data)
+    pdf_id = await save_pdf_in_db(project_id, file.filename, bytes_data, pdf_type)
+    
+    # Automatically run stage 1: Parse and create structure
+    filename, pdf_bytes = await get_pdf_bytes(pdf_id)
+    output_dir = pdf_output_dir(project_id, pdf_id)
+    os.makedirs(output_dir, exist_ok=True)
+    pdf_path = os.path.join(output_dir, filename)
+    save_bytes_to_disk(pdf_path, pdf_bytes)
+    stage_parse_pdf(pdf_path, output_dir)
+    
     return PDFMetadataOut(id=pdf_id, filename=file.filename)
 
 @app.get("/projects/{project_id}/pdfs", response_model=List[PDFMetadataOut])
@@ -372,12 +396,61 @@ async def list_project_pdfs(project_id: str):
     pdfs = await get_pdf_meta_for_project(project_id)
     return [PDFMetadataOut(id=pdf['id'], filename=pdf['filename']) for pdf in pdfs]
 
-@app.get("/projects/{project_id}/pdfs/{pdf_id}/download")
+@app.delete("/projects/{project_id}/pdfs/{pdf_id}")
+async def delete_pdf(project_id: str, pdf_id: str):
+    # Delete the PDF from MongoDB
+    delete_result = await pdfs_coll.delete_one({"_id": ObjectId(pdf_id), "project_id": project_id})
+    if delete_result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="PDF not found")
+    
+    # Delete the output directory for this PDF if it exists
+    pdf_output_dir = get_pdf_output_dir(project_id, pdf_id)
+    if os.path.exists(pdf_output_dir):
+        shutil.rmtree(pdf_output_dir)
+    
+    return {"detail": "PDF deleted successfully"}
+
+@app.get("/projects/{project_id}/download")
 async def download_pdf(project_id: str, pdf_id: str):
     filename, pdf_bytes = await get_pdf_bytes(pdf_id)
     temp_path = f"/tmp/{pdf_id}-{filename}"
     save_bytes_to_disk(temp_path, pdf_bytes)
     return FileResponse(temp_path, media_type='application/pdf', filename=filename)
+
+@app.get("/projects/{project_id}/details")
+async def get_project_details(project_id: str = Path(..., description="The ID of the project to retrieve")):
+    # Fetch project
+    project = await projects_coll.find_one({"_id": ObjectId(project_id)})
+    if not project:
+        return JSONResponse(status_code=404, content={"detail": "Project not found"})
+
+    # Fetch PDFs associated with project
+    pdfs_cursor = pdfs_coll.find({"project_id": project_id})
+    pdfs = []
+    async for pdf in pdfs_cursor:
+        pdfs.append({
+            "id": str(pdf["_id"]),
+            "name": pdf["filename"],
+            "type": pdf.get("type", "bid"),  # Default to 'bid' if not set
+            "bidderName": pdf.get("bidderName"),  # Optional
+            "uploadDate": pdf.get("uploadDate", datetime.now().isoformat())
+        })
+
+    # Assuming the first PDF is 'tender' if type not specified, or based on type
+    tender_file = next((p for p in pdfs if p["type"] == "tender"), None)
+    bid_files = [p for p in pdfs if p["type"] == "bid"]
+
+    # Compose response matching the Project interface
+    project_out = {
+        "id": str(project["_id"]),
+        "name": project["name"],
+        "tenderFile": tender_file,
+        "bidFiles": bid_files,
+        "createdAt": project.get("createdAt", datetime.now().isoformat()),
+        "status": project.get("status", "draft")  # Default to 'draft'
+    }
+
+    return project_out
 
 @app.get("/pipeline/stages")
 async def get_pipeline_stages():
@@ -406,11 +479,12 @@ async def run_pipeline_stage(project_id: str, pdf_id: str, stage_id: int, reques
         toc_content = stage_extract_toc(tree, output_dir)
         # Offer the raw toc_content for UI to display & correct, also provide auto-suggested by LLM
         auto_suggested = stage_select_compliance_sections(toc_content, ask_groq_with_file_content)
-        return {"toc": toc_content, "auto_compliance_sections": auto_suggested}
+        return {"compliance_sections": auto_suggested}
 
     elif stage_id == 3:
         data = await request.json()
-        compliance_sections = data.get("compliance_sections")
+        print("Recieved data", data)
+        compliance_sections = data.get("compliance_sections", {}).get("compliance_sections", {})
         if not compliance_sections:
             raise HTTPException(400, "Missing compliance_sections")
         
@@ -424,9 +498,13 @@ async def run_pipeline_stage(project_id: str, pdf_id: str, stage_id: int, reques
         root_node = tree_json.get("root", {})
 
         extracted = {}
+        print("Compliance sections:", compliance_sections)
         for section_type, section_title in compliance_sections.items():
+            print("Processing section:", section_type, "with title:", section_title)
             # Remove index/numbering (if needed), or leave as is for matching
-            section_heading = section_title[2:] if section_title and section_title[1] == '.' else section_title
+            section_heading = section_title
+            if isinstance(section_title, str) and len(section_title) > 1 and section_title[1] == '.':
+                section_heading = section_title[2:]
             found = traverse_json_tree(root_node, section_heading)
             # print("Found:", found)
             extracted[section_type] = {
