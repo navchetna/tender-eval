@@ -4,9 +4,9 @@ import { Plus, Trash2, File, FolderOpen, FolderClosed, Upload, Loader2 } from "l
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import { API_BASE_URL } from '@/lib/constants';
 
 // --- Configuration ---
-const API_BASE_URL = 'http://localhost:8000';
 
 // --- Type Definitions to match the Python API ---
 interface PDFMetadata {
