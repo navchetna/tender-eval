@@ -2,8 +2,9 @@ import os
 import json
 from typing import List, Dict, Optional
 
+
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Path
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from bson import ObjectId
@@ -13,9 +14,11 @@ import io
 import shutil
 from datetime import datetime
 
+
 from groq import Groq
 from dotenv import load_dotenv
 import motor.motor_asyncio
+
 
 from comps.parsers.tree import Tree
 from comps.parsers.text import Text
@@ -24,14 +27,17 @@ from comps.parsers.treeparser import TreeParser
 from comps.dataprep.excel_to_json_price import excel_to_price_compliance_json
 from comps.dataprep.excel_to_json_tech import excel_to_technical_compliance_json
 
+
 # ------------ CONFIG & INIT -----------------
 load_dotenv()
 MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://localhost:27100')
 DB_NAME = os.environ.get('DB_NAME', 'tender_eval')
 BASE_OUTPUT_DIR = "out"
 
+
 def get_pdf_output_dir(project_id, pdf_id):
     return os.path.join(BASE_OUTPUT_DIR, str(project_id), str(pdf_id))
+
 
 # --------- FastAPI and CORS (for local dev) -----------
 app = FastAPI()
@@ -42,16 +48,19 @@ app.add_middleware(
     allow_headers=['*'],
 )
 
+
 # --------- Mongo connection ------------
 mongo_client = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI)
 db = mongo_client[DB_NAME]
 projects_coll = db['projects']
 pdfs_coll = db['pdfs']
 
+
 # -------- Helper Models ----------------
 class ProjectCreateReq(BaseModel):
     name: str
     description: Optional[str] = None
+
 
 class ProjectOut(BaseModel):
     id: str
@@ -59,11 +68,14 @@ class ProjectOut(BaseModel):
     description: Optional[str] = None
     pdfs: List[str] = []
 
+
 class PDFMetadataOut(BaseModel):
     id: str
     filename: str
 
+
 # ---------- Utility Functions ---------------
+
 
 def parse_pdf_pipeline_stages():
     # Just a names/ids list for the frontend
@@ -75,8 +87,10 @@ def parse_pdf_pipeline_stages():
         {"id": 5, "name": "Export to JSON"},
     ]
 
+
 def pdf_output_dir(project_id, pdf_id):
     return get_pdf_output_dir(project_id, pdf_id)
+
 
 async def save_pdf_in_db(project_id, filename, bytes_data, pdf_type: str = "bid"):
     doc = {
@@ -89,11 +103,13 @@ async def save_pdf_in_db(project_id, filename, bytes_data, pdf_type: str = "bid"
     result = await pdfs_coll.insert_one(doc)
     return str(result.inserted_id)
 
+
 async def get_pdf_bytes(pdf_id):
     pdf = await pdfs_coll.find_one({'_id': ObjectId(pdf_id)})
     if not pdf:
         raise HTTPException(404, 'PDF not found')
     return pdf["filename"], pdf["data"]
+
 
 async def get_pdf_meta_for_project(project_id):
     pdfs = pdfs_coll.find({'project_id': project_id})
@@ -105,15 +121,18 @@ async def get_pdf_meta_for_project(project_id):
         })
     return result
 
+
 def save_bytes_to_disk(path, bytes_data):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "wb") as f:
         f.write(bytes_data)
 
+
 def fuzzy_matches(heading, query):
     from fuzzywuzzy import fuzz
     score = fuzz.ratio(heading.strip().lower(), query.strip().lower())
     return score >= 80
+
 
 def find_node_by_level_or_title(rootNode, query):
     print(rootNode.get_length_children())
@@ -123,12 +142,15 @@ def find_node_by_level_or_title(rootNode, query):
         print(f"High score for '{rootNode.get_heading().strip()}' with '{query.strip()}'!\n")
         return rootNode
 
+
     for i in range(rootNode.get_length_children()):
         result = find_node_by_level_or_title(rootNode.get_child(i), query)
         if result:
             return result
 
+
     return None
+
 
 def traverse_json_tree(json_node, query):
     """
@@ -156,6 +178,7 @@ def traverse_json_tree(json_node, query):
                         return result
     return None
 
+
 def find_markdown_in_json_section(section_dict):
     """
     Given a node dict (with key "content"), try to return the markdown block (first string or any string).
@@ -168,6 +191,7 @@ def find_markdown_in_json_section(section_dict):
             return item
     return None
 
+
 def retrieve_from_pdf(target_node):
     if target_node:
         print("Found Node:", target_node.get_heading())
@@ -178,6 +202,7 @@ def retrieve_from_pdf(target_node):
         print(" No table/ Node found not found")
     return None
 
+
 def markdown_to_df(markdown_content, section_title):
     section_title = section_title.replace(" ", "_")
     lines = [line for line in markdown_content.splitlines() if line.strip().startswith('|')]
@@ -187,6 +212,7 @@ def markdown_to_df(markdown_content, section_title):
     df = df.drop(df.columns[[0, -1]], axis=1)
     df.columns = [col.strip() for col in df.columns]
     return df
+
 
 def extract_markdown_table_from_list(markdown_list):
     """
@@ -209,6 +235,7 @@ def extract_markdown_table_from_list(markdown_list):
         return potential_table
     return None
 
+
 def combine_price_and_tech_json(json_dir_path, output_filename="combined.json"):
     combined_data = {
         "price_compliance": {},
@@ -230,7 +257,9 @@ def combine_price_and_tech_json(json_dir_path, output_filename="combined.json"):
         json.dump(combined_data, f, indent=4)
     return output_path
 
+
 # --------------- Stage Functions (as previously modularized, but sync for backend CLI) ---------------
+
 
 def stage_parse_pdf(pdf_bytes_path, output_dir):
     tree = Tree(pdf_bytes_path)
@@ -240,16 +269,19 @@ def stage_parse_pdf(pdf_bytes_path, output_dir):
     parser.generate_output_json(tree)
     return tree
 
+
 def stage_extract_toc(tree, output_dir):
     toc_path = os.path.join(output_dir, 'toc.txt')
     with open(toc_path, 'r', encoding='utf-8') as f:
         toc_content = f.read()
     return toc_content
 
+
 def stage_select_compliance_sections(toc_content, ask_groq_function):
     sections_str = ask_groq_function(toc_content)
     compliance_sections = json.loads(sections_str)
     return compliance_sections
+
 
 def stage_extract_section_nodes(tree, compliance_sections):
     extracted = {}
@@ -263,6 +295,7 @@ def stage_extract_section_nodes(tree, compliance_sections):
         }
     return extracted
 
+
 def stage_convert_to_df(extracted):
     dfs = {}
     for k, v in extracted.items():
@@ -270,6 +303,7 @@ def stage_convert_to_df(extracted):
             df = markdown_to_df(v["markdown"], v["section_title"])
             dfs[k] = df
     return dfs
+
 
 def stage_save_excel_files(pdf_output_dir, dfs):
     excel_dir = os.path.join(pdf_output_dir, 'excel')
@@ -280,6 +314,7 @@ def stage_save_excel_files(pdf_output_dir, dfs):
         df.to_excel(excel_path, index=False)
         excel_paths[k] = excel_path
     return excel_paths
+
 
 def stage_transform_to_json(pdf_output_dir, excel_paths):
     json_dir = os.path.join(pdf_output_dir, 'json')
@@ -298,6 +333,7 @@ def stage_transform_to_json(pdf_output_dir, excel_paths):
     json_outputs["combined"] = combined_path
     return json_outputs
 
+
 # --------------- Ask Groq to identify compliance sections -----------------
 def ask_groq_with_file_content(toc_content):
     client = Groq(api_key="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")
@@ -310,14 +346,17 @@ def ask_groq_with_file_content(toc_content):
         
         - The "technical" field should contain the single TOC entry that is most relevant to **technical compliance**, such as Platform Capabilities, functional requirements, platform specifications, implementation details, architecture.
 
+
         - The "price" field should contain the single most relevant entry for **price compliance**, which typically refers to a **price bid table** or **price evaluation section**. These are usually structured tables in the document where bidders must approximate the cost of delivering each line item. These entries are often titled **"Price Bid Evaluation"**, **"Commercial Bid Evaluation"**, or similar.
         
         You must respond only with JSON in the following format:
+
 
         {
             "technical": "<section_number> <section_title>",
             "price": "<section_number> <section_title>"
         }
+
 
         These sections will be used to compare the tender requirements against bidder documents, so it is critical to select the sections that provide the clearest and most complete technical and price requirement details respectively. Even a single extra whitespace can cause the prohram to fail to find the section, so ensure the output is exactly as specified. You should EXACTLY match the section titles as they appear in the TOC, including any leading numbers or formatting.
     
@@ -339,7 +378,9 @@ def ask_groq_with_file_content(toc_content):
     )
     return chat_completion.choices[0].message.content
 
+
 # --------------- ROUTES -------------------
+
 
 @app.get("/projects", response_model=List[ProjectOut])
 async def list_projects():
@@ -355,6 +396,7 @@ async def list_projects():
         ))
     return res
 
+
 @app.post("/projects", response_model=ProjectOut)
 async def create_project(req: ProjectCreateReq):
     doc = {
@@ -363,6 +405,7 @@ async def create_project(req: ProjectCreateReq):
     }
     result = await projects_coll.insert_one(doc)
     return ProjectOut(id=str(result.inserted_id), name=req.name, description=req.description, pdfs=[])
+
 
 @app.delete("/projects/{project_id}")
 async def delete_project(project_id: str):
@@ -381,6 +424,7 @@ async def delete_project(project_id: str):
     
     return {"detail": "Project deleted successfully"}
 
+
 @app.post("/projects/{project_id}/pdfs", response_model=PDFMetadataOut)
 async def upload_pdf(project_id: str, file: UploadFile = File(...), pdf_type: Optional[str] = "bid"):
     bytes_data = await file.read()
@@ -396,10 +440,12 @@ async def upload_pdf(project_id: str, file: UploadFile = File(...), pdf_type: Op
     
     return PDFMetadataOut(id=pdf_id, filename=file.filename)
 
+
 @app.get("/projects/{project_id}/pdfs", response_model=List[PDFMetadataOut])
 async def list_project_pdfs(project_id: str):
     pdfs = await get_pdf_meta_for_project(project_id)
     return [PDFMetadataOut(id=pdf['id'], filename=pdf['filename']) for pdf in pdfs]
+
 
 @app.delete("/projects/{project_id}/pdfs/{pdf_id}")
 async def delete_pdf(project_id: str, pdf_id: str):
@@ -415,12 +461,14 @@ async def delete_pdf(project_id: str, pdf_id: str):
     
     return {"detail": "PDF deleted successfully"}
 
+
 @app.get("/projects/{project_id}/download")
 async def download_pdf(project_id: str, pdf_id: str):
     filename, pdf_bytes = await get_pdf_bytes(pdf_id)
     temp_path = f"/tmp/{pdf_id}-{filename}"
     save_bytes_to_disk(temp_path, pdf_bytes)
     return FileResponse(temp_path, media_type='application/pdf', filename=filename)
+
 
 @app.get("/projects/{project_id}/pdfs/{pdf_id}/excel/{filename}")
 async def get_excel_file(project_id: str, pdf_id: str, filename: str):
@@ -430,12 +478,14 @@ async def get_excel_file(project_id: str, pdf_id: str, filename: str):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(file_path, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename=filename)
 
+
 @app.get("/projects/{project_id}/details")
 async def get_project_details(project_id: str = Path(..., description="The ID of the project to retrieve")):
     # Fetch project
     project = await projects_coll.find_one({"_id": ObjectId(project_id)})
     if not project:
         return JSONResponse(status_code=404, content={"detail": "Project not found"})
+
 
     # Fetch PDFs associated with project
     pdfs_cursor = pdfs_coll.find({"project_id": project_id})
@@ -449,9 +499,11 @@ async def get_project_details(project_id: str = Path(..., description="The ID of
             "uploadDate": pdf.get("uploadDate", datetime.now().isoformat())
         })
 
+
     # Assuming the first PDF is 'tender' if type not specified, or based on type
     tender_file = next((p for p in pdfs if p["type"] == "tender"), None)
     bid_files = [p for p in pdfs if p["type"] == "bid"]
+
 
     # Compose response matching the Project interface
     project_out = {
@@ -463,13 +515,53 @@ async def get_project_details(project_id: str = Path(..., description="The ID of
         "status": project.get("status", "draft")  # Default to 'draft'
     }
 
+
     return project_out
+
+@app.get("/projects/{project_id}/pdfs/{pdf_id}/view")
+async def view_pdf(project_id: str = Path(..., description="Project ID"), pdf_id: str = Path(..., description="PDF ID")):
+    # Fetch the PDF document from MongoDB
+    pdf_doc = await pdfs_coll.find_one({"_id": ObjectId(pdf_id), "project_id": project_id})
+    if not pdf_doc:
+        raise HTTPException(status_code=404, detail="PDF not found or does not belong to this project")
+    
+    # Get the binary data and filename
+    pdf_data = pdf_doc.get("data")  # Assuming "data" field stores the binary PDF content
+    filename = pdf_doc.get("filename", "document.pdf")
+    
+    if not pdf_data:
+        raise HTTPException(status_code=500, detail="PDF data not found in database")
+    
+    # Stream the binary data with inline disposition for rendering
+    def iterfile():
+        yield pdf_data  # Yield the binary data (if it's bytes; adjust if it's a stream)
+    
+    headers = {
+        "Content-Disposition": f"inline; filename={filename}",
+        "Content-Type": "application/pdf"
+    }
+    
+    return StreamingResponse(iterfile(), headers=headers, media_type="application/pdf")
+
+
+@app.get("/projects/{project_id}/pdfs/{pdf_id}/json/{filename}")
+async def get_json_file(project_id: str, pdf_id: str, filename: str):
+    base_dir = "out"
+    file_path = os.path.join(base_dir, project_id, pdf_id, "json", filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="JSON file not found")
+    return FileResponse(file_path, media_type="application/json", filename=filename)
+
+
+
 
 @app.get("/pipeline/stages")
 async def get_pipeline_stages():
     return parse_pdf_pipeline_stages()
 
+
 # ------------------- PIPELINE STAGE ENDPOINTS, all async calls and temp-files ----------------------
+
 
 @app.post("/projects/{project_id}/pdfs/{pdf_id}/stage/{stage_id}")
 async def run_pipeline_stage(project_id: str, pdf_id: str, stage_id: int, request: Request):
@@ -480,11 +572,13 @@ async def run_pipeline_stage(project_id: str, pdf_id: str, stage_id: int, reques
     pdf_path = os.path.join(output_dir, filename)
     save_bytes_to_disk(pdf_path, pdf_bytes)
 
+
     # Stage 1: Parse and create structure
     if stage_id == 1:
         
         tree = stage_parse_pdf(pdf_path, output_dir)
         return {"status": "parsed", "output_dir": output_dir}
+
 
     # Stage 2: Extract TOC and get Compliance Section Candidates via LLM
     elif stage_id == 2:
@@ -493,6 +587,7 @@ async def run_pipeline_stage(project_id: str, pdf_id: str, stage_id: int, reques
         # Offer the raw toc_content for UI to display & correct, also provide auto-suggested by LLM
         auto_suggested = stage_select_compliance_sections(toc_content, ask_groq_with_file_content)
         return {"compliance_sections": auto_suggested}
+
 
     elif stage_id == 3:
         data = await request.json()
@@ -510,6 +605,7 @@ async def run_pipeline_stage(project_id: str, pdf_id: str, stage_id: int, reques
             tree_json = json.load(f)
         root_node = tree_json.get("root", {})
 
+
         extracted = {}
         print("Compliance sections:", compliance_sections)
         for section_type, section_title in compliance_sections.items():
@@ -526,7 +622,7 @@ async def run_pipeline_stage(project_id: str, pdf_id: str, stage_id: int, reques
                 "full_heading": found[0] if found else None
             }
         return extracted
- 
+
     elif stage_id == 4:
         try:
             body_bytes = await request.body()
@@ -538,11 +634,9 @@ async def run_pipeline_stage(project_id: str, pdf_id: str, stage_id: int, reques
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Unexpected error processing request: {str(e)}")
 
-
         dfs = {}
         extracted = extracted.get("compliance_sections", {})
         print("Extracted sections:", len(extracted))
-
 
         for k, v in extracted.items():
             # print(f"Processing section: {k} with title: {v}")
@@ -550,7 +644,6 @@ async def run_pipeline_stage(project_id: str, pdf_id: str, stage_id: int, reques
             if markdown_content:
                 df = markdown_to_df(markdown_content, v['section_title'])
                 dfs[k] = df
-
 
         excel_paths = stage_save_excel_files(output_dir, dfs)
         print("Excel paths:", excel_paths)
@@ -569,7 +662,13 @@ async def run_pipeline_stage(project_id: str, pdf_id: str, stage_id: int, reques
         excel_dir = os.path.join(output_dir, 'excel')
         excel_paths = {f.split(".")[0]: os.path.join(excel_dir, f) for f in os.listdir(excel_dir) if f.endswith(".xlsx")}
         json_outputs = stage_transform_to_json(output_dir, excel_paths)
-        return {"json_outputs": json_outputs, "output_dir": output_dir}
+
+        # Construct and return the download URL for combined.json
+        combined_filename = "combined.json"
+        download_url = f"http://localhost:8000/projects/{project_id}/pdfs/{pdf_id}/json/{combined_filename}"
+        
+        return {"download_url": download_url}
+
 
     else:
         raise HTTPException(400, f"Unknown pipeline stage: {stage_id}")
