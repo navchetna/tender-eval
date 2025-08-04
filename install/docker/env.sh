@@ -1,0 +1,3 @@
+export MONGO_URI=mongodb://mongodb:27017
+export DB_NAME=tender_eval
+export GROQ_API_KEY=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

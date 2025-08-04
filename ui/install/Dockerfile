@@ -1,19 +1,17 @@
 # Stage 1: Build
 FROM node:20-alpine AS builder
-
+ARG SERVER_URL
 WORKDIR /app
 
 # Install dependencies and copy source files
 COPY ui/ ./
-RUN \
-  if [ -f package-lock.json ]; then npm ci; \
-  elif [ -f pnpm-lock.yaml ]; then npm install -g pnpm && pnpm install; \
-  elif [ -f yarn.lock ]; then yarn install --frozen-lockfile; \
-  else npm install; fi
+COPY ui/package*.json ./
+RUN npm install
 
 COPY . .
 
 # Build the app
+ENV VITE_SERVER_URL=$SERVER_URL
 RUN npm run build
 
 # Stage 2: Run Vite Preview

@@ -32,6 +32,7 @@ from comps.dataprep.excel_to_json_tech import excel_to_technical_compliance_json
 load_dotenv()
 MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://localhost:27100')
 DB_NAME = os.environ.get('DB_NAME', 'tender_eval')
+GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 BASE_OUTPUT_DIR = "out"
 
 
@@ -186,6 +187,7 @@ def find_markdown_in_json_section(section_dict):
     if not section_dict:
         return None
     contents = section_dict.get("content", [])
+    
     for item in contents:
         if isinstance(item, str):
             return item
@@ -336,7 +338,7 @@ def stage_transform_to_json(pdf_output_dir, excel_paths):
 
 # --------------- Ask Groq to identify compliance sections -----------------
 def ask_groq_with_file_content(toc_content):
-    client = Groq(api_key="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")
+    client = Groq(api_key=GROQ_API_KEY)
     system_prompt = """
         You are an information extraction API that identifies the most relevant sections from a tender document's Table of Contents (TOC) for technical and price compliance.
         
@@ -380,6 +382,40 @@ def ask_groq_with_file_content(toc_content):
 
 
 # --------------- ROUTES -------------------
+class ProjectUpdateReq(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+@app.put("/projects/{project_id}", response_model=ProjectOut)
+async def update_project(project_id: str, req: ProjectUpdateReq):
+    # Fetch the existing project
+    project = await projects_coll.find_one({"_id": ObjectId(project_id)})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Prepare update data only for provided fields
+    update_data = {}
+    if req.name is not None:
+        update_data["name"] = req.name
+    if req.description is not None:
+        update_data["description"] = req.description
+    
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No updates provided")
+    
+    # Update the project in MongoDB
+    await projects_coll.update_one({"_id": ObjectId(project_id)}, {"$set": update_data})
+    
+    # Fetch updated project details
+    updated_project = await projects_coll.find_one({"_id": ObjectId(project_id)})
+    pdfs = await get_pdf_meta_for_project(project_id)
+    
+    return ProjectOut(
+        id=str(updated_project["_id"]),
+        name=updated_project["name"],
+        description=updated_project.get("description"),
+        pdfs=[pdf['id'] for pdf in pdfs]
+    )
 
 
 @app.get("/projects", response_model=List[ProjectOut])
