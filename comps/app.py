@@ -32,7 +32,7 @@ from comps.dataprep.excel_to_json_tech import excel_to_technical_compliance_json
 load_dotenv()
 MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://localhost:27100')
 DB_NAME = os.environ.get('DB_NAME', 'tender_eval')
-GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
+GROQ_API_KEY = os.environ.get('GROQ_API_KEY', "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")
 BASE_OUTPUT_DIR = "out"
 
 
@@ -622,7 +622,10 @@ async def run_pipeline_stage(project_id: str, pdf_id: str, stage_id: int, reques
         toc_content = stage_extract_toc(tree, output_dir)
         # Offer the raw toc_content for UI to display & correct, also provide auto-suggested by LLM
         auto_suggested = stage_select_compliance_sections(toc_content, ask_groq_with_file_content)
-        return {"compliance_sections": auto_suggested}
+        temp_suggested = auto_suggested
+        temp_suggested["technical"] = temp_suggested["technical"][2:]
+        temp_suggested["price"] = temp_suggested["price"][2:]
+        return {"compliance_sections": temp_suggested}
 
 
     elif stage_id == 3:
@@ -648,8 +651,8 @@ async def run_pipeline_stage(project_id: str, pdf_id: str, stage_id: int, reques
             print("Processing section:", section_type, "with title:", section_title)
             # Remove index/numbering (if needed), or leave as is for matching
             section_heading = section_title
-            if isinstance(section_title, str) and len(section_title) > 1 and section_title[1] == '.':
-                section_heading = section_title[2:]
+            # if isinstance(section_title, str) and len(section_title) > 1 and section_title[1] == '.':
+            #     section_heading = section_title[2:]
             found = traverse_json_tree(root_node, section_heading)
             # print("Found:", found)
             extracted[section_type] = {
