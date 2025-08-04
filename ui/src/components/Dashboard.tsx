@@ -50,13 +50,12 @@ const Dashboard = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Mock stages data (in real scenario, fetch from backend)
   const stages = [
-    { id: 1, title: 'Parsing and creating structure', status: 'completed' },
+    { id: 1, title: 'Parsing document and creating fast lookup', status: 'completed' },
     { id: 2, title: 'Finding technical and price compliance from TOC', status: 'pending' },
-    { id: 3, title: 'Finding compliance requirements from tree', status: 'pending' },
-    { id: 4, title: 'Converting to dataframes & excel sheets', status: 'pending' },
-    { id: 5, title: 'Transforming into JSON files', status: 'pending' },
+    { id: 3, title: 'Finding compliance requirements from the fast lookup', status: 'pending' },
+    { id: 4, title: 'Populating excel sheets', status: 'pending' },
+    { id: 5, title: 'Preparing data fror scoring', status: 'pending' },
   ];
 
   // Fetch project details when activeProjectId changes
