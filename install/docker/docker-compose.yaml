@@ -11,24 +11,24 @@ services:
       - "27018:27017"
     environment:
       no_proxy: ${no_proxy}
-      # MONGO_INITDB_ROOT_USERNAME: agents
-      # MONGO_INITDB_ROOT_PASSWORD: agents
+      MONGO_INITDB_ROOT_USERNAME: agents
+      MONGO_INITDB_ROOT_PASSWORD: agents
     restart: unless-stopped
   
-  # groq-service:
-  #   image: thebeginner86intel/ai-agents-groq:latest
-  #   container_name: groq-service
-  #   ports:
-  #     - "5099:8000"
-  #   volumes:
-  #     - "./cache:/root/.cache"
-  #   environment:
-  #     no_proxy: ${no_proxy}
-  #     http_proxy: ${http_proxy}
-  #     https_proxy: ${https_proxy}
-  #     GROQ_API_KEY: ${GROQ_API_KEY}
-  #     HTTP_PROXY: ${HTTP_PROXY}
-  #     HTTPS_PROXY: ${HTTPS_PROXY}
+  groq-service:
+    image: thebeginner86intel/ai-agents-groq:latest
+    container_name: groq-service
+    ports:
+      - "5099:8000"
+    volumes:
+      - "./cache:/root/.cache"
+    environment:
+      no_proxy: ${no_proxy}
+      http_proxy: ${http_proxy}
+      https_proxy: ${https_proxy}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      HTTP_PROXY: ${HTTP_PROXY}
+      HTTPS_PROXY: ${HTTPS_PROXY}
 
   backend:
     image: navchetna/tender-eval-backend:latest
@@ -38,6 +38,8 @@ services:
       - "8000:8000"
     environment:
       - no_proxy=${no_proxy}
+      - http_proxy=${http_proxy}
+      - https_proxy=${https_proxy}
       - MONGO_URI=${MONGO_URI}
       - DB_NAME=${DB_NAME}
       - GROQ_API_KEY=${GROQ_API_KEY}
