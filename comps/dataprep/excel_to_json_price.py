@@ -1,5 +1,4 @@
 import pandas as pd
-import json
 import re
 
 def excel_to_price_compliance_json(
@@ -19,17 +18,15 @@ def excel_to_price_compliance_json(
     if normalise_headers:
         df.columns = [_clean_header(c) for c in df.columns]
 
-    key_column = next((c for c in df.columns if c.lower() == 'item'), None)
-    if key_column is None:
-        if allow_fallback:
-            key_column = df.columns[0]
-        else:
-            raise KeyError("No column named 'Item' found in the sheet.")
+    all_headers = list(df.columns)
+
+    if len(df.columns) < 2:
+        raise KeyError("Expected at least two columns to select index 1 as key.")
+    key_column = str(df.columns[1])
 
     df = df.dropna(subset=[key_column])
 
     nested = {}
-
     for _, row in df.iterrows():
         item_name = str(row[key_column]).strip()
         payload = {
@@ -40,6 +37,7 @@ def excel_to_price_compliance_json(
         nested[item_name] = payload
 
     return nested
+
 
 # def main():
 #     excel_file = '/home/ritik-intel/Ervin/tender-eval/comps/6._Price_Bid_Submission_(Ref:_Annexure1,_Section1.4).xlsx'

@@ -21,6 +21,7 @@ from PIL import Image
 load_dotenv()
 
 OUTPUT_DIR = "out"
+#ideally should be within OUTPUT/
 NCERT_TOC_DIR = "../parsers/ncert_toc"
 
 logger = CustomLogger("treeparser")
@@ -28,23 +29,23 @@ logger = CustomLogger("treeparser")
 class TreeParser:
     def __init__(self, output_dir):
         self.output_dir = output_dir
+        print("Output dir: ", self.output_dir)
         mkdirIfNotExists(self.output_dir)
 
     def get_filename(self, file):
         return os.path.splitext(os.path.basename(file))[0]
 
     def generate_markdown(self, file, filename):
+        print("Within generate_markdown\n\n")
         if not output_exists(self.output_dir, filename):
             config = {
                 "output_format": "markdown",
-                "use_llm": True,
+                # "use_llm": True,
                 "llm_service": "marker.services.openai.OpenAIService",
-                "OpenAIService_openai_base_url": "http://localhost:8010/v1",
+                "OpenAIService_openai_base_url": "http://g2-wyn04.iind.intel.com:9000/v1",
                 "OpenAIService_openai_model": "Qwen/Qwen2.5-VL-7B-Instruct",
                 "openai_api_key": os.environ.get("OPENAI_API_KEY", "DUMMY_KEY"),
                 "format_lines": True,
-                "force_ocr": True,
-                "TORCH_DEVICE": "cpu",
             }
             converter = PdfConverter(
                 artifact_dict=create_model_dict(),

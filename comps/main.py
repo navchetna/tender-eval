@@ -24,15 +24,16 @@ PDF_DIR = os.environ.get("PDF_DIR")
 print("Parsing pdfs in: ", PDF_DIR)
 
 GROQ_API_KEY= os.getenv('GROQ_API_KEY')
-OUTPUT_DIR = 'tender-eval-outputs-1'
+OUTPUT_DIR = 'out/'
 
 # instead of a single path, this should take a directory and loop through files
 
 
-def parse_pdf(pdf_path, output_dir):
+def parse_pdf(pdf_path):
+    file_dir_name = pdf_path.split('/')[-1].replace('.pdf','')
     # Create the Tree and parser
     tree = Tree(pdf_path)
-    parser = TreeParser(output_dir)
+    parser = TreeParser(f"out/{file_dir_name}")
     # Populate the tree
     parser.populate_tree(tree)
     # Save hierarchy as text
@@ -199,7 +200,7 @@ def ingest_pdf_directory(pdf_dir):
             ## PART 1 create a tree in memory for each pdf -> this also creates their .md and toc.txt
             pdf_path = os.path.join(pdf_dir, filename)
             print(f"\nParsing file: {pdf_path}")
-            tree = parse_pdf(pdf_path, OUTPUT_DIR)
+            tree = parse_pdf(pdf_path)
             print(f"Done parsing {filename}!")
 
             print("Extracting TOC from outputs")
@@ -213,8 +214,9 @@ def ingest_pdf_directory(pdf_dir):
             ## Part 3 - Now we have a dictionary of requirements, both tech and price
             ## we need to find the nodes in the TREE that match these requirements
             ## once we find these, we extract those parts from the markdown and convert them into panda dataframes (if theyre tables)
-            json_dir = os.path.join(OUTPUT_DIR, filename, 'json')
-            excel_dir = os.path.join(OUTPUT_DIR, filename, 'excel')
+            file_dir_name = filename.replace('.pdf','')
+            json_dir = os.path.join(OUTPUT_DIR, file_dir_name, 'json')
+            excel_dir = os.path.join(OUTPUT_DIR, file_dir_name, 'excel')
             os.makedirs(json_dir, exist_ok=True)
             os.makedirs(excel_dir, exist_ok=True)
 
