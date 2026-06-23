@@ -5,7 +5,7 @@ WORKDIR /app
 RUN apt-get update -y && apt-get install -y --no-install-recommends --fix-missing \
     build-essential \
     default-jre \
-    libgl1-mesa-glx \
+    libgl1 \
     libjemalloc-dev \
     libreoffice \
     poppler-utils \

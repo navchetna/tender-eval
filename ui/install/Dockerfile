@@ -1,17 +1,16 @@
 # Stage 1: Build
 FROM node:20-alpine AS builder
-ARG SERVER_URL
+ARG SERVER_URL=http://localhost:8000
 WORKDIR /app
 
 # Install dependencies and copy source files
-COPY ui/ ./
 COPY ui/package*.json ./
-RUN npm install
+RUN npm install --legacy-peer-deps
 
-COPY . .
+COPY ui/ ./
 
 # Build the app
-ENV VITE_SERVER_URL=$SERVER_URL
+ENV VITE_API_BASE_URL=$SERVER_URL
 RUN npm run build
 
 # Stage 2: Run Vite Preview

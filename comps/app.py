@@ -272,8 +272,18 @@ def stage_parse_pdf(pdf_bytes_path, output_dir):
     return tree
 
 
+def ensure_parsed_artifacts(pdf_path, output_dir):
+    toc_path = os.path.join(output_dir, 'toc.txt')
+    output_json_path = os.path.join(output_dir, 'output.json')
+    if os.path.exists(toc_path) and os.path.exists(output_json_path):
+        return None
+    return stage_parse_pdf(pdf_path, output_dir)
+
+
 def stage_extract_toc(tree, output_dir):
     toc_path = os.path.join(output_dir, 'toc.txt')
+    if not os.path.exists(toc_path):
+        raise HTTPException(404, f"toc.txt not found at {toc_path}. Run stage 1 first.")
     with open(toc_path, 'r', encoding='utf-8') as f:
         toc_content = f.read()
     return toc_content
@@ -618,7 +628,7 @@ async def run_pipeline_stage(project_id: str, pdf_id: str, stage_id: int, reques
 
     # Stage 2: Extract TOC and get Compliance Section Candidates via LLM
     elif stage_id == 2:
-        tree = Tree(pdf_path)
+        tree = ensure_parsed_artifacts(pdf_path, output_dir) or Tree(pdf_path)
         toc_content = stage_extract_toc(tree, output_dir)
         # Offer the raw toc_content for UI to display & correct, also provide auto-suggested by LLM
         auto_suggested = stage_select_compliance_sections(toc_content, ask_groq_with_file_content)
@@ -637,6 +647,7 @@ async def run_pipeline_stage(project_id: str, pdf_id: str, stage_id: int, reques
         
         # To do: make the output path dynamic
         output_dir = get_pdf_output_dir(project_id, pdf_id)
+        ensure_parsed_artifacts(pdf_path, output_dir)
         output_json_path = os.path.join(output_dir, "output.json")
         if not os.path.exists(output_json_path):
             raise HTTPException(404, f"output.json not found at {output_json_path}")
