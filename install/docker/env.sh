@@ -1,3 +1,3 @@
 export MONGO_URI=mongodb://agents:agents@mongodb:27017/?authSource=admin
 export DB_NAME=tender_eval
-export GROQ_API_KEY=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
+export GROQ_API_KEY=
