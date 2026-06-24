@@ -216,7 +216,6 @@ torchvision==0.22.1
 tqdm==4.67.1
 transformers==4.53.2
 trimesh==4.7.0
-triton==3.3.1
 types-pillow==10.2.0.20240822
 types-requests==2.32.4.20250611
 typing-extensions==4.14.1
