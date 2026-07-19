@@ -46,6 +46,16 @@ async def _store_artifacts(
         )
         entries[f'{stem}{suffix}'] = link
 
+    # TOC artifact — upload to Drive and keep parsed JSON for postgres (optional endpoint).
+    toc_content = None
+    toc_bytes = await client.fetch_toc(task_id)
+    if toc_bytes is not None:
+        _, toc_link = await asyncio.to_thread(
+            drive.upload_bytes, settings, f'{stem}_toc.txt', toc_bytes, 'text/plain', parsed_folder_id
+        )
+        entries[f'{stem}_toc.txt'] = toc_link
+        toc_content = toc_bytes.decode('utf-8', errors='replace')
+
     # Images → <stem>_images/ subfolder.
     images = await client.fetch_images(task_id)
     images_folder_id: str | None = None
@@ -62,6 +72,7 @@ async def _store_artifacts(
     return ParseArtifacts(
         parsed_folder_id=parsed_folder_id,
         images_folder_id=images_folder_id,
+        toc_content=toc_content,
         entries=entries,
     )
 

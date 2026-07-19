@@ -79,6 +79,7 @@ class ParsingRepository:
                         parse_error = NULL,
                         drive_parsed_folder_id = %s,
                         drive_images_folder_id = %s,
+                        parse_toc = %s,
                         parse_artifacts = %s,
                         updated_at = now()
                     WHERE file_id = %s
@@ -86,6 +87,7 @@ class ParsingRepository:
                     (
                         artifacts.parsed_folder_id,
                         artifacts.images_folder_id,
+                        artifacts.toc_content,
                         Jsonb(artifacts.model_dump()),
                         file_id,
                     ),

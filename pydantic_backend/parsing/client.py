@@ -46,14 +46,26 @@ class ParserClient:
         await self._client.aclose()
 
     async def submit_pdf(self, file_name: str, content: bytes, mime_type: str) -> str:
-        """Submit a PDF for processing; return the parser task id."""
-        response = await self._client.post(
-            f'{self._base}/api/convert',
-            data={'user': self._user},
-            files={'file': (file_name, content, mime_type or 'application/pdf')},
-        )
-        response.raise_for_status()
-        return str(response.json()['task_id'])
+        """Submit a PDF for processing; return the parser task id.
+
+        Retries once on ReadError: the connection pool may have handed back a
+        TCP connection that the server already closed (keep-alive expiry), which
+        causes httpx to raise ReadError before any response bytes arrive.  A
+        single retry opens a fresh connection.
+        """
+        for attempt in range(2):
+            try:
+                response = await self._client.post(
+                    f'{self._base}/api/convert',
+                    data={'user': self._user},
+                    files={'file': (file_name, content, mime_type or 'application/pdf')},
+                )
+                response.raise_for_status()
+                return str(response.json()['task_id'])
+            except httpx.ReadError:
+                if attempt == 1:
+                    raise
+        raise RuntimeError('unreachable')
 
     async def get_status(self, task_id: str) -> tuple[ParseStatus, str | None]:
         """Poll task state; return (status, error_message_if_any)."""
@@ -70,6 +82,14 @@ class ParserClient:
 
     async def fetch_tree(self, task_id: str) -> bytes:
         response = await self._client.get(f'{self._base}/api/results/{task_id}/tree')
+        response.raise_for_status()
+        return response.content
+
+    async def fetch_toc(self, task_id: str) -> bytes | None:
+        """Return TOC bytes, or None if the parser does not expose a /toc endpoint."""
+        response = await self._client.get(f'{self._base}/api/results/{task_id}/toc')
+        if response.status_code == 404:
+            return None
         response.raise_for_status()
         return response.content
 

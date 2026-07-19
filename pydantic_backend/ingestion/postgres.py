@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS file_repository (
   parse_attempts INTEGER NOT NULL DEFAULT 0,
   drive_parsed_folder_id TEXT,
   drive_images_folder_id TEXT,
+  parse_toc TEXT,
   parse_artifacts JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),

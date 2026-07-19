@@ -37,6 +37,7 @@ class ParseArtifacts(BaseModel):
 
     parsed_folder_id: str
     images_folder_id: str | None = None
+    toc_content: str | None = None  # raw TOC text stored directly in postgres
     entries: dict[str, str] = {}  # artifact_name -> drive_web_link
 
 
