@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
+from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 
 from ..config import Settings
 
@@ -120,6 +120,56 @@ def upload_attachment(
         mimetype=attachment.mime_type,
         resumable=False,
     )
+    file = service.files().create(
+        body=meta, media_body=media, fields='id,webViewLink'
+    ).execute()
+    return file['id'], file.get('webViewLink', '')
+
+
+def ensure_subfolder(settings: Settings, parent_folder_id: str, name: str) -> str:
+    """Find or create a subfolder `name` under `parent_folder_id`; return its id."""
+    service = _drive_service(settings)
+    q = (
+        f"name = '{name}' "
+        f"and '{parent_folder_id}' in parents "
+        f"and mimeType = 'application/vnd.google-apps.folder' "
+        f"and trashed = false"
+    )
+    results = service.files().list(q=q, fields='files(id,name)', spaces='drive').execute()
+    folders = results.get('files', [])
+    if folders:
+        return folders[0]['id']
+    meta = {
+        'name': name,
+        'mimeType': 'application/vnd.google-apps.folder',
+        'parents': [parent_folder_id],
+    }
+    return service.files().create(body=meta, fields='id').execute()['id']
+
+
+def download_file(settings: Settings, drive_file_id: str) -> bytes:
+    """Download the raw bytes of a Drive file."""
+    service = _drive_service(settings)
+    buffer = io.BytesIO()
+    request = service.files().get_media(fileId=drive_file_id)
+    downloader = MediaIoBaseDownload(buffer, request)
+    done = False
+    while not done:
+        _, done = downloader.next_chunk()
+    return buffer.getvalue()
+
+
+def upload_bytes(
+    settings: Settings,
+    name: str,
+    content: bytes,
+    mime_type: str,
+    parent_folder_id: str,
+) -> tuple[str, str]:
+    """Upload raw bytes to Drive under `parent_folder_id`; return (drive_file_id, web_view_link)."""
+    service = _drive_service(settings)
+    meta = {'name': name, 'parents': [parent_folder_id]}
+    media = MediaIoBaseUpload(io.BytesIO(content), mimetype=mime_type, resumable=False)
     file = service.files().create(
         body=meta, media_body=media, fields='id,webViewLink'
     ).execute()

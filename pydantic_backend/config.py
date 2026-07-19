@@ -18,6 +18,17 @@ class Settings(BaseSettings):
     logfire_send: bool = False
     logfire_service_name: str = 'tender-repository-ingestion'
 
+    # --- PDF parser (stage 2) ---
+    parser_base_url: str = 'http://134.191.217.242:8069/parse-pdf-v1'
+    parser_user: str = 'tender-eval'
+    parser_api_key: SecretStr | None = None
+    parse_poll_interval_seconds: float = 5.0
+    parse_max_poll_attempts: int = 120
+    parse_worker_enabled: bool = False
+    parse_worker_interval_seconds: float = 30.0
+    parse_batch_size: int = 5
+    parse_max_attempts: int = 3
+
 
 @lru_cache
 def get_settings() -> Settings:
