@@ -14,8 +14,9 @@ from ..config import Settings
 from .models import Attachment, IncomingEmail
 
 GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly'
+GMAIL_SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send'
 DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive'
-ALL_SCOPES = [GMAIL_READONLY_SCOPE, DRIVE_SCOPE]
+ALL_SCOPES = [GMAIL_READONLY_SCOPE, GMAIL_SEND_SCOPE, DRIVE_SCOPE]
 
 
 def authorize(settings: Settings) -> None:
@@ -72,3 +73,16 @@ def fetch_unread_pdf_emails(settings: Settings, max_results: int = 20) -> list[I
             headers = _headers(payload)
             emails.append(IncomingEmail(message_id=message['id'], subject=headers.get('subject', ''), sender=headers.get('from', ''), received_at=datetime.fromtimestamp(int(message['internalDate']) / 1000, tz=timezone.utc), attachments=attachments))
     return emails
+
+
+def send_email(settings: Settings, to: str, subject: str, body_text: str) -> str:
+    """Send a plain-text email via the Gmail API (requires gmail.send scope); returns the sent message id."""
+    from email.mime.text import MIMEText
+
+    service = build('gmail', 'v1', credentials=_credentials(settings), cache_discovery=False)
+    message = MIMEText(body_text)
+    message['to'] = to
+    message['subject'] = subject
+    raw = base64.urlsafe_b64encode(message.as_bytes()).decode('utf-8')
+    sent = service.users().messages().send(userId='me', body={'raw': raw}).execute()
+    return str(sent['id'])

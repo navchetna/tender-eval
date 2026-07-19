@@ -29,6 +29,13 @@ class Settings(BaseSettings):
     parse_batch_size: int = 5
     parse_max_attempts: int = 3
 
+    # --- Tender/bid evaluation (stage 3) ---
+    groq_api_key: SecretStr
+    groq_model: str = 'llama-3.3-70b-versatile'
+    groq_base_url: str = 'https://api.groq.com/openai/v1'
+    reviewer_email: str = ''
+    eval_batch_size: int = 5
+
 
 @lru_cache
 def get_settings() -> Settings:

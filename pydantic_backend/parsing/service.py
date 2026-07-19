@@ -33,7 +33,7 @@ async def _store_artifacts(
         drive.ensure_subfolder, settings, file.version_folder_id, PARSED_FOLDER_NAME
     )
     stem = file.file_name.rsplit('.', 1)[0]
-    entries: dict[str, str] = {}
+    entries: dict[str, dict[str, str]] = {}
 
     # Text/JSON artifacts. Names follow parsed_results/<filename>_* per the spec.
     for suffix, mime, fetch in (
@@ -41,19 +41,19 @@ async def _store_artifacts(
         ('.md', 'text/markdown', client.fetch_markdown),
     ):
         content = await fetch(task_id)
-        _, link = await asyncio.to_thread(
+        file_id, link = await asyncio.to_thread(
             drive.upload_bytes, settings, f'{stem}{suffix}', content, mime, parsed_folder_id
         )
-        entries[f'{stem}{suffix}'] = link
+        entries[f'{stem}{suffix}'] = {'id': file_id, 'link': link}
 
     # TOC artifact — upload to Drive and keep parsed JSON for postgres (optional endpoint).
     toc_content = None
     toc_bytes = await client.fetch_toc(task_id)
     if toc_bytes is not None:
-        _, toc_link = await asyncio.to_thread(
+        toc_file_id, toc_link = await asyncio.to_thread(
             drive.upload_bytes, settings, f'{stem}_toc.txt', toc_bytes, 'text/plain', parsed_folder_id
         )
-        entries[f'{stem}_toc.txt'] = toc_link
+        entries[f'{stem}_toc.txt'] = {'id': toc_file_id, 'link': toc_link}
         toc_content = toc_bytes.decode('utf-8', errors='replace')
 
     # Images → <stem>_images/ subfolder.
@@ -64,10 +64,10 @@ async def _store_artifacts(
             drive.ensure_subfolder, settings, parsed_folder_id, f'{stem}_images'
         )
         for name, page, data in images:
-            _, link = await asyncio.to_thread(
+            image_id, link = await asyncio.to_thread(
                 drive.upload_bytes, settings, f'page_{page}_{name}', data, 'image/png', images_folder_id
             )
-            entries[f'page_{page}_{name}'] = link
+            entries[f'page_{page}_{name}'] = {'id': image_id, 'link': link}
 
     return ParseArtifacts(
         parsed_folder_id=parsed_folder_id,

@@ -57,6 +57,34 @@ CREATE TABLE IF NOT EXISTS file_repository (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (email_message_id, file_name)
 );
+CREATE TABLE IF NOT EXISTS employees (
+  employee_id UUID PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS tender_evaluations (
+  evaluation_id UUID PRIMARY KEY,
+  file_id UUID NOT NULL UNIQUE REFERENCES file_repository(file_id),
+  project_id UUID NOT NULL REFERENCES projects(project_id),
+  version INTEGER NOT NULL,
+  detection_model TEXT,
+  technical_section_title TEXT,
+  technical_section_content TEXT,
+  technical_status TEXT NOT NULL DEFAULT 'SUGGESTED',
+  technical_corrected BOOLEAN NOT NULL DEFAULT false,
+  technical_reviewed_by UUID REFERENCES employees(employee_id),
+  technical_reviewed_at TIMESTAMPTZ,
+  price_section_title TEXT,
+  price_section_content TEXT,
+  price_status TEXT NOT NULL DEFAULT 'SUGGESTED',
+  price_corrected BOOLEAN NOT NULL DEFAULT false,
+  price_reviewed_by UUID REFERENCES employees(employee_id),
+  price_reviewed_at TIMESTAMPTZ,
+  notified_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 '''
 
 
@@ -92,6 +120,13 @@ class PostgresRepository:
                     (message_id,),
                 )
                 return await cursor.fetchone() is not None
+
+    async def get_file(self, file_id: str) -> dict | None:
+        """Fetch a single file_repository row (used to re-locate parse artifacts for evaluation review)."""
+        async with await AsyncConnection.connect(self.settings.database_url.get_secret_value(), row_factory=dict_row) as connection:
+            async with connection.cursor() as cursor:
+                await cursor.execute('SELECT * FROM file_repository WHERE file_id = %s', (file_id,))
+                return await cursor.fetchone()
 
     async def persist_email(
         self,
