@@ -14,10 +14,10 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# lib/
 lib64/
-!ui/src/lib/
-!ui/src/lib/**
+# !ui/src/lib/
+# !ui/src/lib/**
 parts/
 sdist/
 var/
