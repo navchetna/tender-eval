@@ -1,0 +1,176 @@
+@import "tailwindcss";
+
+:root {
+  --color-canvas: #f4f3ee;
+  --color-surface: #ffffff;
+  --color-surface2: #faf9f5;
+
+  --color-ink: #20201c;
+  --color-ink-soft: #57554e;
+  --color-ink-faint: #908e85;
+
+  --color-line: #e8e6de;
+  --color-line-strong: #d7d4ca;
+
+  --color-accent: #2f5d8a;
+  --color-accent-bg: #e9f0f7;
+  --color-accent-ink: #204365;
+
+  --color-ok-fg: #2c6a49;
+  --color-ok-bg: #e7f1eb;
+  --color-ok-dot: #3f8f68;
+
+  --color-warn-fg: #8a6314;
+  --color-warn-bg: #f6eeda;
+  --color-warn-dot: #c08a2a;
+
+  --color-bad-fg: #a53b3b;
+  --color-bad-bg: #f6e7e7;
+  --color-bad-dot: #c25959;
+
+  --color-none-fg: #8a887f;
+  --color-none-bg: #efeee8;
+  --color-none-dot: #b9b7ad;
+
+  --color-info-fg: #204365;
+  --color-info-bg: #e9f0f7;
+  --color-info-dot: #2f5d8a;
+}
+
+@theme inline {
+  --color-canvas: var(--color-canvas);
+  --color-surface: var(--color-surface);
+  --color-surface2: var(--color-surface2);
+
+  --color-ink: var(--color-ink);
+  --color-ink-soft: var(--color-ink-soft);
+  --color-ink-faint: var(--color-ink-faint);
+
+  --color-line: var(--color-line);
+  --color-line-strong: var(--color-line-strong);
+
+  --color-accent: var(--color-accent);
+  --color-accent-bg: var(--color-accent-bg);
+  --color-accent-ink: var(--color-accent-ink);
+
+  --color-ok-fg: var(--color-ok-fg);
+  --color-ok-bg: var(--color-ok-bg);
+  --color-ok-dot: var(--color-ok-dot);
+
+  --color-warn-fg: var(--color-warn-fg);
+  --color-warn-bg: var(--color-warn-bg);
+  --color-warn-dot: var(--color-warn-dot);
+
+  --color-bad-fg: var(--color-bad-fg);
+  --color-bad-bg: var(--color-bad-bg);
+  --color-bad-dot: var(--color-bad-dot);
+
+  --color-none-fg: var(--color-none-fg);
+  --color-none-bg: var(--color-none-bg);
+  --color-none-dot: var(--color-none-dot);
+
+  --color-info-fg: var(--color-info-fg);
+  --color-info-bg: var(--color-info-bg);
+  --color-info-dot: var(--color-info-dot);
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-serif: ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-line-strong);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #c3bfb2;
+  background-clip: content-box;
+}
+
+.lift {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.lift:hover {
+  transform: translateY(-1.5px);
+  box-shadow: 0 8px 24px -10px rgba(30, 28, 24, 0.22);
+  border-color: #cfccc1 !important;
+}
+
+.nav-item:hover {
+  background: #f2f1ec;
+}
+
+.rowh {
+  transition: background 0.1s ease;
+  cursor: pointer;
+}
+.rowh:hover {
+  background: var(--color-surface2);
+}
+.rowsel {
+  background: #eef4fa !important;
+}
+
+.cellh {
+  transition: background 0.1s ease;
+  cursor: pointer;
+}
+.cellh:hover {
+  background: #f2f0e9;
+}
+
+.btn {
+  transition: background 0.13s ease, border-color 0.13s ease, transform 0.05s ease, box-shadow 0.13s ease;
+}
+.btn:active {
+  transform: translateY(1px);
+}
+
+.tab {
+  transition: color 0.12s ease, border-color 0.12s ease;
+  cursor: pointer;
+}
+
+.fade {
+  animation: fade 0.2s ease;
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.slidein {
+  animation: slidein 0.22s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+@keyframes slidein {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
