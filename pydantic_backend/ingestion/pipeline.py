@@ -1,10 +1,11 @@
 import re
+from pathlib import PurePosixPath
 
 import logfire
 
 from ..config import Settings
 from .drive import ensure_project_folder, upload_attachment
-from .models import DriveContext, IncomingEmail, IngestionResult, ProjectSubject, StageResult
+from .models import Attachment, DriveContext, IncomingEmail, IngestionResult, ProjectSubject, StageResult
 from .postgres import PostgresRepository
 
 SUBJECT_PATTERN = re.compile(r'^\s*(?P<code>[A-Za-z0-9][A-Za-z0-9_-]*)\s*:\s*(?P<name>.+?)\s*$')
@@ -21,6 +22,30 @@ def parse_subject(subject: str) -> ProjectSubject:
     return ProjectSubject(project_code=match.group('code'), project_name=match.group('name'))
 
 
+def _dedupe_attachment_names(attachments: list[Attachment]) -> list[Attachment]:
+    """
+    A single email carrying one tender + multiple bidder PDFs can legitimately contain
+    two attachments with the identical file_name (e.g. two bidders both attach "bid.pdf").
+    Downstream, both the Drive-upload dict (keyed by file_name) and the Postgres
+    `UNIQUE (email_message_id, file_name)` constraint key off this name, so an unmodified
+    duplicate would silently overwrite/drop the earlier attachment. Rename the 2nd+
+    occurrence in-memory (before anything is uploaded or persisted) to keep every
+    attachment distinct: "bid.pdf" -> "bid (2).pdf" -> "bid (3).pdf", etc.
+    """
+    seen_counts: dict[str, int] = {}
+    deduped: list[Attachment] = []
+    for attachment in attachments:
+        count = seen_counts.get(attachment.file_name, 0) + 1
+        seen_counts[attachment.file_name] = count
+        if count == 1:
+            deduped.append(attachment)
+        else:
+            path = PurePosixPath(attachment.file_name)
+            new_name = f'{path.stem} ({count}){path.suffix}'
+            deduped.append(attachment.model_copy(update={'file_name': new_name}))
+    return deduped
+
+
 async def persist_gmail_email(
     email: IncomingEmail,
     repository: PostgresRepository,
@@ -34,6 +59,7 @@ async def persist_gmail_email(
             raise ValueError('Email contains no PDF attachments')
         if await repository.is_already_ingested(email.message_id):
             raise AlreadyIngestedError(f'Email {email.message_id} already ingested; skipping')
+        email = email.model_copy(update={'attachments': _dedupe_attachment_names(email.attachments)})
         stages.append(StageResult(stage='01_validate_email', status='completed'))
 
     with logfire.span('ingestion.02.parse_subject'):

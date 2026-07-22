@@ -31,10 +31,17 @@ class Settings(BaseSettings):
 
     # --- Tender/bid evaluation (stage 3) ---
     groq_api_key: SecretStr
-    groq_model: str = 'llama-3.3-70b-versatile'
+    groq_model: str = 'openai/gpt-oss-20b'
     groq_base_url: str = 'https://api.groq.com/openai/v1'
     reviewer_email: str = ''
     eval_batch_size: int = 5
+
+    # --- Auth (stage 4): HTTP Basic, bootstrapped admin account ---
+    admin_email: str = ''
+    admin_password: SecretStr = SecretStr('')
+
+    # --- CORS (stage 5): browser origins allowed to call this API directly ---
+    cors_origins: list[str] = ['http://localhost:3000']
 
 
 @lru_cache
