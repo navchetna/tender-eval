@@ -164,48 +164,72 @@ function DocCard({
   onUpdated,
   selectedFileId,
   onSelectFile,
+  expanded,
 }: {
   item: Item;
   tocByFileId: Record<string, string | null>;
   onUpdated: (docType: DocType, updated: EvaluationRecord) => void;
   selectedFileId: string | null;
   onSelectFile: (file: SelectedFile) => void;
+  expanded: boolean;
 }) {
   const { docType, evaluation } = item;
+  const isSelected = selectedFileId === evaluation.file_id;
+  const typeBg = docType === "tender" ? "bg-[#e2e9f0]" : "bg-[#f3eee3]";
+  const typeText = docType === "tender" ? "text-[#3e5e7e]" : "text-[#706049]";
   return (
-    <div className="rounded-[9px] border-[0.5px] border-line p-[15px]">
-      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={() => onSelectFile({ projectId: evaluation.project_id, fileId: evaluation.file_id, fileName: evaluation.file_name })}
-          className={`btn flex cursor-pointer items-center gap-[9px] rounded-[7px] border-none bg-transparent px-1 py-[2px] text-left ${
-            selectedFileId === evaluation.file_id ? "bg-accent/10" : ""
-          }`}
-          title="View source PDF"
-        >
-          <FileText size={14} className="text-ink-faint" />
-          <span className="text-[14px] font-semibold text-ink underline decoration-line-strong decoration-1 underline-offset-2">
+    <div
+      className={`overflow-hidden rounded-[9px] border-[0.5px] transition-colors ${isSelected ? "border-accent" : "border-line"}`}
+    >
+      <button
+        type="button"
+        onClick={() => onSelectFile({ projectId: evaluation.project_id, fileId: evaluation.file_id, fileName: evaluation.file_name })}
+        className={`btn flex w-full min-w-0 cursor-pointer flex-col items-stretch gap-[6px] rounded-none border-none px-[15px] py-[10px] text-left transition-colors hover:brightness-95 ${typeBg} ${
+          isSelected ? "ring-2 ring-inset ring-accent/40" : ""
+        }`}
+        title="Click to preview source PDF"
+      >
+        <div className="flex min-w-0 items-center gap-[9px]">
+          <ChevronRight size={13} className={`shrink-0 text-ink-faint transition-transform ${expanded ? "rotate-90" : ""}`} />
+          <FileText size={14} className="shrink-0 text-ink-faint" />
+          <span
+            className={`min-w-0 flex-1 truncate text-[14px] font-semibold underline decoration-1 underline-offset-2 hover:decoration-2 ${typeText}`}
+          >
             {evaluation.file_name}
           </span>
           <Pill tone="none" mono>
             {docType} · v{evaluation.version}
           </Pill>
-        </button>
-      </div>
-      <TopicRow
-        docType={docType}
-        evaluation={evaluation}
-        topic="technical"
-        toc={tocByFileId[evaluation.file_id] ?? null}
-        onUpdated={(u) => onUpdated(docType, u)}
-      />
-      <TopicRow
-        docType={docType}
-        evaluation={evaluation}
-        topic="price"
-        toc={tocByFileId[evaluation.file_id] ?? null}
-        onUpdated={(u) => onUpdated(docType, u)}
-      />
+        </div>
+        {!expanded && (
+          <div className="flex flex-wrap items-center gap-[6px] pl-[22px]">
+            <Pill tone={evaluation.technical_status === "APPROVED" ? "ok" : "warn"} mono>
+              tech · {evaluation.technical_status.toLowerCase()}
+            </Pill>
+            <Pill tone={evaluation.price_status === "APPROVED" ? "ok" : "warn"} mono>
+              price · {evaluation.price_status.toLowerCase()}
+            </Pill>
+          </div>
+        )}
+      </button>
+      {expanded && (
+        <div className="p-[15px] pt-3">
+          <TopicRow
+            docType={docType}
+            evaluation={evaluation}
+            topic="technical"
+            toc={tocByFileId[evaluation.file_id] ?? null}
+            onUpdated={(u) => onUpdated(docType, u)}
+          />
+          <TopicRow
+            docType={docType}
+            evaluation={evaluation}
+            topic="price"
+            toc={tocByFileId[evaluation.file_id] ?? null}
+            onUpdated={(u) => onUpdated(docType, u)}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -251,6 +275,10 @@ function ProjectAccordion({
   const selectedItem = group.items.find((i) => i.evaluation.file_id === selectedFileId) ?? null;
   const isBidFocused = selectedItem?.docType === "bid";
   const isTenderFocused = selectedItem?.docType === "tender";
+
+  // While a document is being previewed, its siblings stay listed (so a reviewer can still see
+  // and switch to any other bid) but collapse down to just the title — their Approve/Correct
+  // buttons are hidden so they can't be mistaken for the previewed document's.
 
   return (
     <Card className="fade mb-[14px] overflow-hidden">
@@ -302,6 +330,7 @@ function ProjectAccordion({
                       onUpdated={onUpdated}
                       selectedFileId={selectedFileId}
                       onSelectFile={onSelectFile}
+                      expanded={!isTenderFocused || item.evaluation.file_id === selectedFileId}
                     />
                   ))
                 )}
@@ -331,6 +360,7 @@ function ProjectAccordion({
                     onUpdated={onUpdated}
                     selectedFileId={selectedFileId}
                     onSelectFile={onSelectFile}
+                    expanded={!isBidFocused || item.evaluation.file_id === selectedFileId}
                   />
                 ))
               )}
@@ -343,7 +373,10 @@ function ProjectAccordion({
             <div key={selectedItem.evaluation.file_id} className="slidein min-w-0 sticky top-[16px]" style={{ flex: "1 1 auto" }}>
               <Card className="overflow-hidden p-[13px]">
                 <div className="mb-[10px] flex items-center justify-between gap-2">
-                  <span className="truncate text-[13px] font-semibold text-ink">{selectedItem.evaluation.file_name}</span>
+                  <div className="flex min-w-0 items-center gap-[7px]">
+                    <FileText size={13} className="shrink-0 text-ink-faint" />
+                    <span className="truncate text-[13px] font-semibold text-ink">{selectedItem.evaluation.file_name}</span>
+                  </div>
                   <button
                     type="button"
                     onClick={() =>

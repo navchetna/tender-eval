@@ -73,9 +73,18 @@
   --color-info-bg: var(--color-info-bg);
   --color-info-dot: var(--color-info-dot);
 
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-sans: var(--font-intelone), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-serif: ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Intel One Display only ships regular (400) and medium (500) weights — remap the
+     heavier utility weights to 500 so browsers don't synthesize a faux-bold (which
+     rendered far too thick) for font-semibold/font-bold/font-extrabold. */
+  --font-weight-medium: 500;
+  --font-weight-semibold: 500;
+  --font-weight-bold: 500;
+  --font-weight-extrabold: 500;
+  --font-weight-black: 500;
 }
 
 body {
@@ -86,6 +95,16 @@ body {
 
 * {
   box-sizing: border-box;
+}
+
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+select {
+  cursor: pointer;
+}
+button:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
 }
 
 ::-webkit-scrollbar {
@@ -105,6 +124,7 @@ body {
 
 .lift {
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  cursor: pointer;
 }
 .lift:hover {
   transform: translateY(-1.5px);
@@ -137,9 +157,13 @@ body {
 
 .btn {
   transition: background 0.13s ease, border-color 0.13s ease, transform 0.05s ease, box-shadow 0.13s ease;
+  cursor: pointer;
 }
 .btn:active {
   transform: translateY(1px);
+}
+.btn:disabled {
+  cursor: not-allowed;
 }
 
 .tab {

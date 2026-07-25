@@ -364,8 +364,7 @@ export function MatrixView({ projectId }: { projectId: string }) {
               {!view && (
                 <div className="flex flex-col items-start gap-[10px]">
                   <p className="text-[12.5px] text-ink-soft">
-                    Aligning bid responses against the tender&apos;s {tab} table requires an LLM pass — nothing runs until
-                    you ask for it.
+                    Aligning bid responses against the tender&apos;s {tab} table requires an LLM pass.
                   </p>
                   <LoadDataButton
                     label={`Show ${tab} comparison`}

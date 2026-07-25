@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { Award, Check, Clock, Mail, Plus, RefreshCw } from "lucide-react";
+import { Award, Check, ChevronDown, Clock, Mail, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Pill } from "@/components/ui/Pill";
 import { Empty } from "@/components/ui/Empty";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ProjectStageTrack } from "@/components/ProjectStageTrack";
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/components/ToastProvider";
@@ -13,6 +14,7 @@ import {
   ApiError,
   assignProject,
   createProject,
+  deleteProject,
   getEmployees,
   getEvaluationsByProject,
   getProjectFiles,
@@ -121,9 +123,20 @@ function AssignSelect({
 }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  const onChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const employeeId = e.target.value;
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  const select = async (employeeId: string) => {
+    setOpen(false);
     if (!employeeId || employeeId === project.assigned_to) return;
     setBusy(true);
     try {
@@ -142,6 +155,8 @@ function AssignSelect({
     }
   };
 
+  const current = employees.find((emp) => emp.employee_id === project.assigned_to);
+
   return (
     <div
       onClick={(e) => {
@@ -151,21 +166,33 @@ function AssignSelect({
       className="mt-[10px] flex items-center gap-2"
     >
       <span className="text-[11px] text-ink-faint">Assigned to</span>
-      <select
-        value={project.assigned_to ?? ""}
-        disabled={busy}
-        onChange={onChange}
-        className="flex-1 rounded-md border-[0.5px] border-line-strong bg-surface px-2 py-[3px] text-[11.5px] text-ink-soft outline-none disabled:opacity-60"
-      >
-        <option value="" disabled>
-          Unassigned
-        </option>
-        {employees.map((emp) => (
-          <option key={emp.employee_id} value={emp.employee_id}>
-            {emp.name}
-          </option>
-        ))}
-      </select>
+      <div ref={containerRef} className="relative flex-1">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => setOpen((o) => !o)}
+          className="btn flex w-full cursor-pointer items-center justify-between gap-2 rounded-md border-[0.5px] border-line-strong bg-surface px-2 py-[3px] text-left text-[11.5px] text-ink-soft outline-none disabled:opacity-60"
+        >
+          <span className="truncate">{current ? current.name : "Unassigned"}</span>
+          <ChevronDown size={12} className={`shrink-0 text-ink-faint transition-transform ${open ? "rotate-180" : ""}`} />
+        </button>
+        {open && (
+          <div className="expand absolute top-full left-0 right-0 z-10 mt-1 max-h-[200px] overflow-auto rounded-[9px] border-[0.5px] border-line bg-surface p-1 shadow-[0_8px_24px_-8px_rgba(30,28,24,.25)]">
+            {employees.map((emp) => (
+              <button
+                key={emp.employee_id}
+                type="button"
+                onClick={() => select(emp.employee_id)}
+                className={`btn block w-full cursor-pointer rounded-[7px] px-2 py-[6px] text-left text-[11.5px] hover:bg-surface2 ${
+                  emp.employee_id === project.assigned_to ? "bg-accent-bg font-medium text-accent-ink" : "text-ink-soft"
+                }`}
+              >
+                {emp.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -178,6 +205,8 @@ export default function ProjectsPage() {
   const [error, setError] = useState<string | null>(null);
   const [checkingGmail, setCheckingGmail] = useState(false);
   const [parsing, setParsing] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = async () => {
     try {
@@ -220,6 +249,21 @@ export default function ProjectsPage() {
     setSummaries((prev) =>
       prev?.map((s) => (s.project.project_id === projectId ? { ...s, project: { ...s.project, assigned_to: employeeId } } : s)) ?? prev
     );
+  };
+
+  const onConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteProject(deleteTarget.project_id);
+      setSummaries((prev) => prev?.filter((s) => s.project.project_id !== deleteTarget.project_id) ?? prev);
+      toast(`Deleted ${deleteTarget.project_name}`);
+      setDeleteTarget(null);
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Failed to delete project");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const onCheckGmail = async () => {
@@ -294,22 +338,38 @@ export default function ProjectsPage() {
             <Card className="lift cursor-pointer p-[17px]">
               <div className="mb-[11px] flex items-center justify-between">
                 <span className="font-mono text-[11px] text-ink-faint">{project.project_code}</span>
-                {project.evaluation_completed ? (
-                  <Pill tone="ok">
-                    <Award size={12} />
-                    Completed
-                  </Pill>
-                ) : bidCount > 0 ? (
-                  <Pill tone="ok">
-                    <Check size={12} />
-                    On track
-                  </Pill>
-                ) : (
-                  <Pill tone="info">
-                    <Clock size={12} />
-                    Intake
-                  </Pill>
-                )}
+                <div className="flex items-center gap-2">
+                  {project.evaluation_completed ? (
+                    <Pill tone="ok">
+                      <Award size={12} />
+                      Completed
+                    </Pill>
+                  ) : bidCount > 0 ? (
+                    <Pill tone="ok">
+                      <Check size={12} />
+                      On track
+                    </Pill>
+                  ) : (
+                    <Pill tone="info">
+                      <Clock size={12} />
+                      Intake
+                    </Pill>
+                  )}
+                  {user?.role === "ADMIN" && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setDeleteTarget(project);
+                      }}
+                      className="btn cursor-pointer rounded-md border-none bg-transparent p-1 text-ink-faint hover:text-bad-fg"
+                      title="Delete project"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="text-[16px] font-semibold text-ink">{project.project_name}</div>
               <div className="my-[10px] flex items-center gap-2 text-[12.5px] text-ink-soft">
@@ -325,6 +385,21 @@ export default function ProjectsPage() {
           </Link>
         ))}
       </div>
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Delete this project?"
+        message={
+          <>
+            This permanently deletes <strong>{deleteTarget?.project_name}</strong> ({deleteTarget?.project_code}) —
+            every uploaded tender/bid file and evaluation record across all versions. This cannot be undone.
+          </>
+        }
+        confirmLabel="Delete project"
+        danger
+        busy={deleting}
+        onConfirm={onConfirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

@@ -586,6 +586,14 @@ async def create_project(body: ProjectIn, _admin: CurrentUser = Depends(require_
     return _to_project(row)
 
 
+@app.delete('/projects/{project_id}', status_code=204)
+async def delete_project(project_id: str, _admin: CurrentUser = Depends(require_admin)) -> None:
+    """Permanently delete a project and every file/evaluation scoped to it. Admin-only."""
+    deleted = await PostgresRepository(get_settings()).delete_project(project_id)
+    if not deleted:
+        raise HTTPException(404, 'Project not found')
+
+
 @app.get('/projects/{project_id}/files')
 async def list_project_files(
     project_id: str, user: CurrentUser = Depends(get_current_user)

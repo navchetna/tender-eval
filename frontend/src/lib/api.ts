@@ -72,6 +72,9 @@ export const getProjects = () => request<Project[]>("/projects");
 export const createProject = (body: ProjectIn) =>
   request<Project>("/projects", { method: "POST", body: JSON.stringify(body) });
 
+export const deleteProject = (projectId: string) =>
+  request<void>(`/projects/${projectId}`, { method: "DELETE" });
+
 export const getProjectFiles = (projectId: string) => request<ProjectFileRecord[]>(`/projects/${projectId}/files`);
 
 export function uploadProjectFiles(

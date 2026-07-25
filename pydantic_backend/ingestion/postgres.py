@@ -220,6 +220,22 @@ class PostgresRepository:
                 await cursor.execute('SELECT * FROM projects WHERE project_id = %s', (project_id,))
                 return await cursor.fetchone()
 
+    async def delete_project(self, project_id: str) -> bool:
+        """Permanently remove a project and everything scoped to it (every version's files,
+        tender/bid evaluations, cached LLM results). No FK is ON DELETE CASCADE, so the
+        dependents are deleted first, in one transaction. Returns False if the project
+        didn't exist."""
+        async with pool_connection(self.settings) as connection:
+            async with connection.cursor() as cursor:
+                await cursor.execute('DELETE FROM llm_result_cache WHERE project_id = %s', (project_id,))
+                await cursor.execute('DELETE FROM tender_evaluations WHERE project_id = %s', (project_id,))
+                await cursor.execute('DELETE FROM bid_evaluations WHERE project_id = %s', (project_id,))
+                await cursor.execute('DELETE FROM file_repository WHERE project_id = %s', (project_id,))
+                await cursor.execute('DELETE FROM projects WHERE project_id = %s RETURNING project_id', (project_id,))
+                deleted = await cursor.fetchone()
+            await connection.commit()
+        return deleted is not None
+
     async def assign_project(self, project_id: str, employee_id: str) -> dict | None:
         """Assign (or reassign) the single reviewer responsible for this project."""
         async with pool_connection(self.settings) as connection:

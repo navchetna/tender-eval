@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { Sidebar } from "@/components/Sidebar";
-import { Header } from "@/components/Header";
+import { PipelineRibbon } from "@/components/PipelineRibbon";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -20,7 +20,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="relative flex h-screen overflow-hidden bg-canvas">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <Header />
+        <PipelineRibbon />
         <main className="flex-1 overflow-auto">{children}</main>
       </div>
     </div>

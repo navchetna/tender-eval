@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutGrid, ClipboardCheck, Activity, GitBranch, Users, LogOut } from "lucide-react";
+import { LayoutGrid, ClipboardCheck, Activity, Users, LogOut } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { getPendingReviewCount } from "@/lib/api";
@@ -75,17 +75,13 @@ export function Sidebar() {
   }, [user]);
 
   return (
-    <aside className="flex w-[218px] shrink-0 flex-col border-r-[0.5px] border-line bg-surface px-3 py-[18px]">
-      <div className="flex items-center gap-[9px] px-2 pb-[18px]">
-        <div className="flex h-[27px] w-[27px] items-center justify-center rounded-lg bg-accent shadow-[0_2px_6px_-2px_rgba(47,93,138,.6)]">
-          <GitBranch size={15} className="text-white" />
-        </div>
-        <div>
-          <div className="text-[13.5px] leading-[1.1] font-semibold">Reconcile</div>
-          <div className="text-[10.5px] text-ink-faint">tender ↔ bid</div>
-        </div>
-      </div>
-      <div className="flex flex-col gap-[2px]">
+    <aside className="flex w-[218px] shrink-0 flex-col border-r-[0.5px] border-line bg-surface px-3 pt-[28px] pb-[18px]">
+      <Link href="/projects" className="flex flex-col items-center gap-[10px] px-2 pb-[18px]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/intel-logo.svg" alt="Intel" className="h-[44px] w-auto" />
+        <div className="text-center text-[15px] leading-[1.15] font-semibold">Tender Bid Evaluator</div>
+      </Link>
+      <div className="mt-[10px] flex flex-col gap-[2px]">
         <NavItem icon={LayoutGrid} label="Projects" href="/projects" active={pathname.startsWith("/projects")} />
         <NavItem
           icon={ClipboardCheck}
@@ -106,7 +102,11 @@ export function Sidebar() {
               <div className="truncate text-[12.5px] font-medium text-ink">{user.name}</div>
               <div className="text-[10.5px] text-ink-faint">{user.role === "ADMIN" ? "Admin" : "Reviewer"}</div>
             </div>
-            <button onClick={onLogout} className="btn cursor-pointer rounded-md border-none bg-transparent p-1 text-ink-faint" title="Log out">
+            <button
+              onClick={onLogout}
+              className="btn cursor-pointer rounded-md border-none bg-transparent p-1 text-ink-faint transition-colors hover:bg-bad-bg hover:text-bad-fg"
+              title="Log out"
+            >
               <LogOut size={15} />
             </button>
           </div>
