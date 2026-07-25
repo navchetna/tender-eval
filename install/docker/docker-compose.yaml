@@ -1,0 +1,81 @@
+# Assumes tender-bid-api.mg2.eglb.intel.com / tender-bid.mg2.eglb.intel.com are already fronted
+# by a reverse proxy that terminates TLS and forwards to these containers' published ports —
+# neither service here serves HTTPS itself.
+#
+# Setup:
+#   cp .env.example .env                 # Postgres credentials — read by Compose itself for
+#                                         # the ${...} substitution below, separate from backend.env
+#   cp backend.env.example backend.env   # then fill in every value — this file is gitignored,
+#                                         # never commit real secrets into this directory
+#   docker compose -f install/docker/docker-compose.yaml up -d --build
+#   curl -X POST http://localhost:8011/setup/database   # one-time: creates tables + bootstrap admin
+#
+# Run from the repo root (build.context below is relative to this compose file, i.e. ../..).
+
+# Without an explicit name, Compose derives the project (and network) name from this file's
+# directory — "docker" — which collides with any other project also run out of a directory
+# named "docker" (both end up wanting a network called docker_default). Pinning it here avoids
+# that collision entirely.
+name: tender-bid
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Published for host-side JDBC/psql/pgAdmin access. This stack sits on public DNS, so if
+    # this host's 5432 is reachable from the internet, restrict it (e.g. a firewall rule scoped
+    # to your own IP) rather than leaving it open to everyone.
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: pydantic_backend/Dockerfile
+    env_file:
+      - ./backend.env
+    environment:
+      # Wired to the bundled `postgres` service above — not in backend.env, so the two can
+      # never drift out of sync. Pointing this backend at a different (e.g. external/managed)
+      # Postgres instead just means: delete the postgres service above and set DATABASE_URL
+      # directly in backend.env instead.
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    volumes:
+      # Gmail/Drive OAuth refresh token — written and refreshed by the app at runtime, so this
+      # must be read-write, not read-only. Matches GMAIL_TOKEN_PATH's default of
+      # .secrets/gmail-token.json, resolved relative to the container's WORKDIR (/app).
+      - ../../.secrets:/app/.secrets
+    ports:
+      - "8011:8011"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../..
+      dockerfile: frontend/Dockerfile
+      args:
+        # Baked into the JS bundle at build time (see frontend/Dockerfile) — changing this
+        # requires `docker compose build frontend` again, not just a restart.
+        NEXT_PUBLIC_API_BASE_URL: https://tender-bid-api.mg2.eglb.intel.com
+    ports:
+      - "3002:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  pgdata:

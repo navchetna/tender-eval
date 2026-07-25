@@ -1,0 +1,20 @@
+# Never send secrets or real env values into a build context — neither Dockerfile COPYs a .env
+# file (env vars come from compose's env_file / build args instead), so this is a hard exclude,
+# not just an optimization.
+.env
+.env.*
+**/.env
+**/.env.*
+.secrets/
+.logfire/
+
+.git/
+.venv/
+**/__pycache__/
+*.pyc
+
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+tender-eval-docs/
