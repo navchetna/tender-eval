@@ -20,9 +20,10 @@ import { FileStageTrack } from "@/components/FileStageTrack";
 import { DetailTabs } from "@/components/DetailTabs";
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/components/ToastProvider";
-import { isFullyApproved } from "@/lib/projectStage";
+import { computeProjectSegments, isFullyApproved, ribbonStageForSegments } from "@/lib/projectStage";
 import { computeFileSegments } from "@/lib/fileStage";
 import { STAGE_LADDER, type Seg } from "@/lib/stageStyles";
+import { useReportActiveStage } from "@/lib/activeStageContext";
 
 function TypeSelect({
   file,
@@ -283,6 +284,18 @@ export function Workspace({ projectId }: { projectId: string }) {
     await load();
     if (viewVersion != null) await loadEvaluations(viewVersion);
   };
+
+  // Reports this project's pipeline progress up to the shared PipelineRibbon in the app layout,
+  // so the reviewer sees where their currently-open project sits relative to the whole pipeline.
+  const stageCurrentFiles = files?.filter((f) => f.version === viewVersion) ?? [];
+  const stageTender = stageCurrentFiles.find((f) => f.file_type === "TENDER") ?? null;
+  const stageTenderEval = stageTender ? (evaluations.find((e) => e.file_id === stageTender.file_id) ?? null) : null;
+  const stageBidEvals = stageCurrentFiles
+    .filter((f) => f.file_type === "BID")
+    .map((f) => evaluations.find((e) => e.file_id === f.file_id))
+    .filter((e): e is EvaluationRecord => e != null);
+  const stageSegs = computeProjectSegments(stageCurrentFiles, stageTenderEval ? [stageTenderEval] : [], stageBidEvals);
+  useReportActiveStage(files && viewVersion != null ? ribbonStageForSegments(stageSegs) : null);
 
   if (error) {
     return (

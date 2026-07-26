@@ -58,3 +58,15 @@ export function isFullyApproved(e: EvaluationRecord): boolean {
 export function isProjectCompleted(currentFiles: ProjectFileRecord[], tenderEvals: EvaluationRecord[], bidEvals: EvaluationRecord[]): boolean {
   return computeProjectSegments(currentFiles, tenderEvals, bidEvals)[4] === "done";
 }
+
+// Maps the 5-segment project ladder onto PipelineRibbon's 6 pipeline stages (Ingest & parse,
+// Classify, Locate sections, Extract clauses, Align, Compliance matrix). Classify happens
+// automatically the instant parsing finishes, so it has no dedicated segment of its own — it's
+// folded into "Ingest & parse" while parsing is still the bottleneck.
+const RIBBON_STAGE_FOR_FIRST_INCOMPLETE_SEGMENT = [0, 0, 2, 3, 4];
+
+export function ribbonStageForSegments(segs: Seg[]): number {
+  const firstIncomplete = segs.findIndex((s) => s !== "done");
+  if (firstIncomplete === -1) return 5; // Compliance matrix — every segment is done
+  return RIBBON_STAGE_FOR_FIRST_INCOMPLETE_SEGMENT[firstIncomplete];
+}

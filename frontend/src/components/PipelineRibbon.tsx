@@ -29,11 +29,14 @@ const STAGES: StageDef[] = [
   { icon: Grid2x2, label: "Compliance matrix", caption: "Excel · per bidder" },
 ];
 
-export function PipelineRibbon() {
+export function PipelineRibbon({ activeStage = null }: { activeStage?: number | null }) {
   return (
     <div className="flex shrink-0 flex-col border-b-[0.5px] border-line bg-surface">
       <div className="flex items-start justify-center gap-1 overflow-x-auto px-5 py-[10px]">
-      {STAGES.map((stage, i) => (
+      {STAGES.map((stage, i) => {
+        const isActive = activeStage != null && i === activeStage;
+        const isPast = activeStage != null && i < activeStage;
+        return (
         <div key={stage.label} className="flex items-start">
           <div className="flex w-[104px] shrink-0 flex-col items-center text-center">
             {stage.agent ? (
@@ -44,13 +47,21 @@ export function PipelineRibbon() {
               <span className="mb-[3px] inline-block h-[15px]" />
             )}
             <div
-              className={`flex h-[34px] w-[34px] items-center justify-center rounded-full border-[1.5px] ${
-                stage.agent ? "border-info-fg bg-info-bg text-info-fg" : "border-line-strong bg-surface2 text-ink-faint"
+              className={`flex h-[34px] w-[34px] items-center justify-center rounded-full border-[1.5px] transition-colors ${
+                isActive
+                  ? "border-accent bg-accent text-white shadow-[0_0_0_4px_var(--color-accent-bg)]"
+                  : isPast
+                    ? "border-ok-fg bg-ok-bg text-ok-fg"
+                    : stage.agent
+                      ? "border-info-fg bg-info-bg text-info-fg"
+                      : "border-line-strong bg-surface2 text-ink-faint"
               }`}
             >
-              <stage.icon size={16} />
+              {isPast ? <Check size={16} /> : <stage.icon size={16} />}
             </div>
-            <div className="mt-[6px] text-[11px] leading-tight font-semibold text-ink">{stage.label}</div>
+            <div className={`mt-[6px] text-[11px] leading-tight font-semibold ${isActive ? "text-accent" : "text-ink"}`}>
+              {stage.label}
+            </div>
             <div className="text-[9.5px] leading-tight text-ink-faint">{stage.caption}</div>
             {stage.humanNote && (
               <div className="mt-[4px] flex items-center gap-[3px] text-[10.5px] font-medium text-warn-fg">
@@ -60,10 +71,11 @@ export function PipelineRibbon() {
             )}
           </div>
           {i < STAGES.length - 1 && (
-            <div className="mt-[34px] h-[1.5px] w-6 shrink-0 self-start bg-line-strong" />
+            <div className={`mt-[34px] h-[1.5px] w-6 shrink-0 self-start transition-colors ${isPast ? "bg-ok-fg" : "bg-line-strong"}`} />
           )}
         </div>
-      ))}
+        );
+      })}
       </div>
     </div>
   );
