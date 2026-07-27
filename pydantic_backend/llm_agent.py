@@ -44,7 +44,10 @@ def structured_agent(
     validated) rather than tool-call-based structured output, matching the plain JSON-mode
     completions this replaces without depending on the gateway model's function-calling support.
     """
-    model_settings: dict = {'temperature': 0}
+    # No fixed temperature: litellm_model routes through auto_router (config.py), which can land
+    # on an Anthropic model, and Anthropic rejects any temperature other than 1 unless extended
+    # thinking is enabled.
+    model_settings: dict = {}
     if max_tokens is not None:
         model_settings['max_tokens'] = max_tokens
     if reasoning_effort is not None:
