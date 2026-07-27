@@ -8,6 +8,7 @@ import type { ComparisonResult, NormalizedView, Project, Topic } from "@/lib/typ
 import { Card } from "@/components/ui/Card";
 import { Empty } from "@/components/ui/Empty";
 import { toneClasses } from "@/lib/tone";
+import { useReportActiveStage } from "@/lib/activeStageContext";
 
 type Tab = "technical" | "price" | "comparison";
 
@@ -228,6 +229,8 @@ function ComparisonPanel({ result }: { result: ComparisonResult }) {
 }
 
 export function MatrixView({ projectId }: { projectId: string }) {
+  useReportActiveStage(5);
+
   const [project, setProject] = useState<Project | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("technical");

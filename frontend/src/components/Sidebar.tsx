@@ -1,14 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LayoutGrid, ClipboardCheck, Activity, Users, LogOut } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
-import { getPendingReviewCount } from "@/lib/api";
-
-const PENDING_COUNT_POLL_MS = 20000;
+import { usePendingReviewCount } from "@/lib/pendingReviewCountContext";
 
 function NavItem({
   icon: Icon,
@@ -45,34 +42,12 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
-  const [pendingCount, setPendingCount] = useState(0);
+  const { count: pendingCount } = usePendingReviewCount();
 
   const onLogout = () => {
     logout();
     router.push("/login");
   };
-
-  // Admins get the count across every project; reviewers only what's assigned to them — the
-  // backend applies that scoping (see GET /evaluation/pending/count), this just displays it.
-  // Polls rather than refetching on every action elsewhere, since review decisions can happen
-  // from several different pages (Review queue, Workspace) and this stays mounted across all of them.
-  useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-    const refresh = () => {
-      getPendingReviewCount()
-        .then(({ count }) => {
-          if (!cancelled) setPendingCount(count);
-        })
-        .catch(() => {});
-    };
-    refresh();
-    const id = setInterval(refresh, PENDING_COUNT_POLL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [user]);
 
   return (
     <aside className="flex w-[218px] shrink-0 flex-col border-r-[0.5px] border-line bg-surface px-3 pt-[28px] pb-[18px]">

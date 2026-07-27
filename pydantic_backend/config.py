@@ -32,7 +32,7 @@ class Settings(BaseSettings):
 
     # --- Tender/bid evaluation (stage 3): LiteLLM gateway (enterprise agentic toolkit) ---
     litellm_base_url: str = 'https://ei-api.mg2.eglb.intel.com/v1'
-    litellm_model: str = 'Qwen/Qwen3-30B-A3B-Instruct-2507'
+    litellm_model: str = 'auto_router'
     litellm_verify_tls: bool = False
     litellm_key_encryption_key: SecretStr  # Fernet key: encrypts each employee's stored LiteLLM key
     litellm_worker_api_key: SecretStr  # used only by the unattended background pipeline worker

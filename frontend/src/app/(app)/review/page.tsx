@@ -10,6 +10,7 @@ import { Empty } from "@/components/ui/Empty";
 import { useToast } from "@/components/ToastProvider";
 import { TocPicker } from "@/components/TocPicker";
 import { PdfViewer } from "@/components/PdfViewer";
+import { usePendingReviewCount } from "@/lib/pendingReviewCountContext";
 
 interface SelectedFile {
   projectId: string;
@@ -410,6 +411,7 @@ export default function ReviewPage() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<SelectedFile | null>(null);
+  const { refresh: refreshPendingCount } = usePendingReviewCount();
 
   useEffect(() => {
     let cancelled = false;
@@ -449,6 +451,7 @@ export default function ReviewPage() {
       if (!stillPending) return prev.filter((e) => e.evaluation_id !== updated.evaluation_id);
       return prev.map((e) => (e.evaluation_id === updated.evaluation_id ? updated : e));
     });
+    refreshPendingCount();
   };
 
   if (error) {

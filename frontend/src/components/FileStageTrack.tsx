@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { ACTIVE_LABEL, LABEL_CLASS, SEG_BG, STAGE_LADDER } from "@/lib/stageStyles";
 import { computeFileSegments } from "@/lib/fileStage";
@@ -31,7 +31,9 @@ export function FileStageTrack({
 }) {
   const toast = useToast();
   const segs = computeFileSegments(file, evaluation, alignmentReady);
-  const [openIdx, setOpenIdx] = useState<number | null>(null);
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const mountedRef = useRef(false);
   const [schema, setSchema] = useState<PipelineSchema | null>(null);
   const [detail, setDetail] = useState<FileStageDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -50,13 +52,32 @@ export function FileStageTrack({
   const onSegmentClick = (i: number, e: React.MouseEvent) => {
     e.stopPropagation();
     if (compact) return;
-    if (openIdx === i) {
-      setOpenIdx(null);
+    if (selectedIdx === i && expanded) {
+      setExpanded(false);
       return;
     }
-    setOpenIdx(i);
+    // Reopening/switching while a track is already mounted can expand immediately — only a fresh
+    // mount (selectedIdx was null) needs to start collapsed and expand a frame later, otherwise
+    // the grid-rows transition has no "before" state to animate from and just snaps open.
+    if (selectedIdx !== null) setExpanded(true);
+    setSelectedIdx(i);
     if (i < 4 && !detail && !loading) fetchDetail();
   };
+
+  // Only a genuine fresh mount (selectedIdx going from null to a value) should auto-expand next
+  // frame — without mountedRef guarding it, this effect also re-fires right after the user closes
+  // the track (selectedIdx still non-null, expanded just went false) and immediately re-expands it,
+  // making "close" appear to do nothing.
+  useEffect(() => {
+    if (selectedIdx === null) {
+      mountedRef.current = false;
+      return;
+    }
+    if (mountedRef.current) return;
+    mountedRef.current = true;
+    const id = requestAnimationFrame(() => setExpanded(true));
+    return () => cancelAnimationFrame(id);
+  }, [selectedIdx]);
 
   // Only the two automated, potentially-transient stages (parsing, section detection) get a
   // retry action — "Clauses" is a human review decision (redo via the review controls, not a
@@ -108,19 +129,28 @@ export function FileStageTrack({
           ))}
         </div>
       )}
-      {openIdx !== null && (
-        <StageDetailPopover
-          label={STAGE_LADDER[openIdx]}
-          status={segs[openIdx]}
-          stage={openIdx < 4 ? PIPELINE_STAGES[openIdx] : "aligned"}
-          schema={openIdx < 4 ? schema?.[PIPELINE_STAGES[openIdx]] ?? null : null}
-          detail={openIdx < 4 ? detail?.[PIPELINE_STAGES[openIdx]] ?? null : null}
-          loading={loading}
-          alignedNote={openIdx === 4 ? ALIGNED_NOTE[segs[4]] : undefined}
-          canRetry={(openIdx === 1 || openIdx === 2) && segs[openIdx] === "failed"}
-          retrying={retrying}
-          onRetry={onRetry}
-        />
+      {selectedIdx !== null && (
+        <div
+          className={`stage-popover-track mt-[8px] ${expanded ? "is-open" : ""}`}
+          onTransitionEnd={(e) => {
+            if (e.propertyName === "grid-template-rows" && !expanded) setSelectedIdx(null);
+          }}
+        >
+          <div>
+            <StageDetailPopover
+              label={STAGE_LADDER[selectedIdx]}
+              status={segs[selectedIdx]}
+              stage={selectedIdx < 4 ? PIPELINE_STAGES[selectedIdx] : "aligned"}
+              schema={selectedIdx < 4 ? schema?.[PIPELINE_STAGES[selectedIdx]] ?? null : null}
+              detail={selectedIdx < 4 ? detail?.[PIPELINE_STAGES[selectedIdx]] ?? null : null}
+              loading={loading}
+              alignedNote={selectedIdx === 4 ? ALIGNED_NOTE[segs[4]] : undefined}
+              canRetry={(selectedIdx === 1 || selectedIdx === 2) && segs[selectedIdx] === "failed"}
+              retrying={retrying}
+              onRetry={onRetry}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

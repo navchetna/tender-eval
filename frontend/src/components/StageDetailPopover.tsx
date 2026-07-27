@@ -53,7 +53,7 @@ export function StageDetailPopover({
   onRetry?: (e: React.MouseEvent) => void;
 }) {
   return (
-    <Card className="expand mt-[8px] overflow-hidden" onClick={undefined}>
+    <Card className="overflow-hidden" onClick={undefined}>
       <div
         className="flex items-center gap-2 border-b-[0.5px] border-line bg-surface2 px-[12px] py-[8px]"
         onClick={(e) => e.stopPropagation()}
