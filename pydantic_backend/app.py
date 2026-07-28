@@ -8,7 +8,7 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFi
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
-from .auth.dependencies import get_current_user, get_llm_credentials, invalidate_user_cache, require_admin
+from .auth.dependencies import get_current_user, get_fast_llm_credentials, get_quality_llm_credentials, invalidate_user_cache, require_admin
 from .auth.models import AssignReviewerRequest, CurrentUser, Role
 from .config import get_settings
 from .db import start_pool, stop_pools
@@ -25,7 +25,7 @@ from .ingestion.gmail import fetch_unread_pdf_emails
 from .ingestion.pipeline import AlreadyIngestedError, persist_gmail_email
 from .ingestion.models import FileType, FileTypeUpdate, IncomingEmail, Project, ProjectFileRecord, ProjectIn, StoredFile
 from .ingestion.postgres import PostgresRepository
-from .llm_credentials import LlmCredentials, encrypt_key
+from .llm_credentials import LlmCredentials
 from .normalization import compare_client as normalization_compare_client
 from .normalization import compliance_service
 from .normalization import excel as normalization_excel
@@ -123,9 +123,7 @@ async def setup_database() -> dict[str, str]:
     admin_password = settings.admin_password.get_secret_value()
     if settings.admin_email and admin_password:
         password_hash = bcrypt.hashpw(admin_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-        admin_litellm_key = settings.admin_litellm_key.get_secret_value()
-        litellm_key_encrypted = encrypt_key(admin_litellm_key, settings) if admin_litellm_key else None
-        await repository.ensure_admin(settings.admin_email, password_hash, litellm_key_encrypted)
+        await repository.ensure_admin(settings.admin_email, password_hash)
     return {'status': 'initialized'}
 
 
@@ -229,7 +227,7 @@ def _pending_filter(user: CurrentUser) -> str | None:
 
 @app.post('/evaluation/tender/process-pending')
 async def evaluation_tender_process_pending(
-    _admin: CurrentUser = Depends(require_admin), creds: LlmCredentials = Depends(get_llm_credentials)
+    _admin: CurrentUser = Depends(require_admin), creds: LlmCredentials = Depends(get_fast_llm_credentials)
 ) -> list[str]:
     """Detect technical/price sections for PARSED tender files that have no evaluation yet, and notify the reviewer."""
     return await _run_evaluation_process_pending(creds, tender_repository(get_settings()))
@@ -262,7 +260,7 @@ async def evaluation_tender_get(evaluation_id: str, user: CurrentUser = Depends(
 
 @app.post('/evaluation/tender/{evaluation_id}/notify')
 async def evaluation_tender_notify(
-    evaluation_id: str, user: CurrentUser = Depends(get_current_user), creds: LlmCredentials = Depends(get_llm_credentials)
+    evaluation_id: str, user: CurrentUser = Depends(get_current_user), creds: LlmCredentials = Depends(get_fast_llm_credentials)
 ) -> dict[str, bool]:
     """Re-send the reviewer notification email (useful if reviewer_email was unset on first run)."""
     return await _run_evaluation_notify(creds, tender_repository(get_settings()), evaluation_id, user)
@@ -283,7 +281,7 @@ async def evaluation_tender_review(
 
 @app.post('/evaluation/bid/process-pending')
 async def evaluation_bid_process_pending(
-    _admin: CurrentUser = Depends(require_admin), creds: LlmCredentials = Depends(get_llm_credentials)
+    _admin: CurrentUser = Depends(require_admin), creds: LlmCredentials = Depends(get_fast_llm_credentials)
 ) -> list[str]:
     """Detect technical/price sections for PARSED bid files that have no evaluation yet, and notify the reviewer."""
     return await _run_evaluation_process_pending(creds, bid_repository(get_settings()))
@@ -316,7 +314,7 @@ async def evaluation_bid_get(evaluation_id: str, user: CurrentUser = Depends(get
 
 @app.post('/evaluation/bid/{evaluation_id}/notify')
 async def evaluation_bid_notify(
-    evaluation_id: str, user: CurrentUser = Depends(get_current_user), creds: LlmCredentials = Depends(get_llm_credentials)
+    evaluation_id: str, user: CurrentUser = Depends(get_current_user), creds: LlmCredentials = Depends(get_fast_llm_credentials)
 ) -> dict[str, bool]:
     return await _run_evaluation_notify(creds, bid_repository(get_settings()), evaluation_id, user)
 
@@ -333,7 +331,7 @@ async def evaluation_bid_review(
 
 @app.post('/evaluation/process-pending')
 async def evaluation_process_pending(
-    _admin: CurrentUser = Depends(require_admin), creds: LlmCredentials = Depends(get_llm_credentials)
+    _admin: CurrentUser = Depends(require_admin), creds: LlmCredentials = Depends(get_fast_llm_credentials)
 ) -> list[str]:
     return await _run_evaluation_process_pending(creds, tender_repository(get_settings()))
 
@@ -366,7 +364,7 @@ async def evaluation_get(evaluation_id: str, user: CurrentUser = Depends(get_cur
 
 @app.post('/evaluation/{evaluation_id}/notify')
 async def evaluation_notify(
-    evaluation_id: str, user: CurrentUser = Depends(get_current_user), creds: LlmCredentials = Depends(get_llm_credentials)
+    evaluation_id: str, user: CurrentUser = Depends(get_current_user), creds: LlmCredentials = Depends(get_fast_llm_credentials)
 ) -> dict[str, bool]:
     return await _run_evaluation_notify(creds, tender_repository(get_settings()), evaluation_id, user)
 
@@ -404,7 +402,7 @@ async def _build_normalized_view(
 @app.get('/normalization/{project_id}/{version}/technical')
 async def normalization_technical(
     project_id: str, version: int,
-    user: CurrentUser = Depends(get_current_user), creds: LlmCredentials = Depends(get_llm_credentials),
+    user: CurrentUser = Depends(get_current_user), creds: LlmCredentials = Depends(get_quality_llm_credentials),
 ) -> NormalizedView:
     """Tender technical requirements next to each approved bid's matched values, computed fresh."""
     return await _build_normalized_view(creds, project_id, version, Topic.technical, user)
@@ -413,7 +411,7 @@ async def normalization_technical(
 @app.get('/normalization/{project_id}/{version}/price')
 async def normalization_price(
     project_id: str, version: int,
-    user: CurrentUser = Depends(get_current_user), creds: LlmCredentials = Depends(get_llm_credentials),
+    user: CurrentUser = Depends(get_current_user), creds: LlmCredentials = Depends(get_quality_llm_credentials),
 ) -> NormalizedView:
     """Tender price line items next to each approved bid's matched values, computed fresh."""
     return await _build_normalized_view(creds, project_id, version, Topic.price, user)
@@ -422,7 +420,7 @@ async def normalization_price(
 @app.get('/normalization/{project_id}/{version}/export')
 async def normalization_export(
     project_id: str, version: int,
-    user: CurrentUser = Depends(get_current_user), creds: LlmCredentials = Depends(get_llm_credentials),
+    user: CurrentUser = Depends(get_current_user), creds: LlmCredentials = Depends(get_quality_llm_credentials),
 ) -> StreamingResponse:
     """Export both the Technical and Price comparison views as a single .xlsx workbook."""
     await _ensure_project_access(project_id, user)
@@ -447,7 +445,8 @@ async def normalization_export(
 @app.post('/normalization/{project_id}/{version}/score/{topic}')
 async def normalization_score(
     project_id: str, version: int, topic: Topic,
-    user: CurrentUser = Depends(get_current_user), creds: LlmCredentials = Depends(get_llm_credentials),
+    user: CurrentUser = Depends(get_current_user),
+    creds: LlmCredentials = Depends(get_quality_llm_credentials),
 ) -> SectionScoreResult:
     """Ask an LLM to holistically score every approved bidder's whole technical or price
     section against the tender, with reasoning per bidder and a comparative narrative across
@@ -469,7 +468,8 @@ async def normalization_score(
 @app.post('/normalization/{project_id}/{version}/compare')
 async def normalization_compare(
     project_id: str, version: int,
-    user: CurrentUser = Depends(get_current_user), creds: LlmCredentials = Depends(get_llm_credentials),
+    user: CurrentUser = Depends(get_current_user),
+    creds: LlmCredentials = Depends(get_quality_llm_credentials),
 ) -> ComparisonResult:
     """Detailed overall comparison across BOTH technical and price sections together: an
     extended pros/cons/precautions assessment per bidder plus one recommended award. Whichever
@@ -502,7 +502,8 @@ async def normalization_compare(
 @app.get('/normalization/{project_id}/{version}/matrix')
 async def normalization_matrix(
     project_id: str, version: int,
-    user: CurrentUser = Depends(get_current_user), creds: LlmCredentials = Depends(get_llm_credentials),
+    user: CurrentUser = Depends(get_current_user),
+    creds: LlmCredentials = Depends(get_quality_llm_credentials),
 ) -> MatrixData:
     """Technical + price compliance matrix: each requirement row judged compliant/partial/
     non-compliant per bidder by an LLM, built on top of the on-demand normalized view.
@@ -779,7 +780,7 @@ async def retry_file_stage(
     project_id: str,
     file_id: str,
     user: CurrentUser = Depends(get_current_user),
-    creds: LlmCredentials = Depends(get_llm_credentials),
+    creds: LlmCredentials = Depends(get_fast_llm_credentials),
 ) -> ProjectFileRecord:
     """
     Manually retry whichever pipeline stage this file is currently stuck on — Parsed

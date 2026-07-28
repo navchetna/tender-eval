@@ -23,8 +23,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 from ..config import get_settings
 from ..db import pool_connection
-from ..evaluation.employee_repository import EmployeeRepository, LlmKeyNotConfiguredError
-from ..llm_credentials import LlmCredentials
+from ..llm_credentials import LlmCredentials, fast_llm_credentials, quality_llm_credentials
 from .models import CurrentUser, Role
 
 _security = HTTPBasic()
@@ -82,11 +81,11 @@ async def require_admin(user: CurrentUser = Depends(get_current_user)) -> Curren
     return user
 
 
-async def get_llm_credentials(user: CurrentUser = Depends(get_current_user)) -> LlmCredentials:
-    """Resolve the caller's own LiteLLM key, so every LLM call they trigger is billed/attributed
-    to their account rather than a shared key."""
-    settings = get_settings()
-    try:
-        return await EmployeeRepository(settings).get_llm_credentials(user.employee_id)
-    except LlmKeyNotConfiguredError as exc:
-        raise HTTPException(403, 'No LiteLLM key assigned to this account — ask an admin to set one') from exc
+async def get_fast_llm_credentials(_user: CurrentUser = Depends(get_current_user)) -> LlmCredentials:
+    """Credentials for extraction/matching/drafting calls, routed to the NPU-served model."""
+    return fast_llm_credentials(get_settings())
+
+
+async def get_quality_llm_credentials(_user: CurrentUser = Depends(get_current_user)) -> LlmCredentials:
+    """Credentials for judgment calls (compliance/scoring/comparison), routed to the cloud model."""
+    return quality_llm_credentials(get_settings())

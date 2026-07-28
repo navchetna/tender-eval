@@ -81,6 +81,7 @@ coverage.xml
 .env.*
 !install/docker/.env.example
 install/docker/backend.env
+install/docker/litellm.env
 
 # Output directories
 output/

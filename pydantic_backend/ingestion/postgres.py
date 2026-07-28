@@ -130,7 +130,9 @@ CREATE TABLE IF NOT EXISTS llm_result_cache (
 MIGRATION_SQL = '''
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS password_hash TEXT;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'REVIEWER';
-ALTER TABLE employees ADD COLUMN IF NOT EXISTS litellm_key_encrypted TEXT;
+-- Per-employee LiteLLM keys are gone: every call now goes through one local LiteLLM proxy
+-- with a shared master key (see llm_credentials.py), so this column has no reader left.
+ALTER TABLE employees DROP COLUMN IF EXISTS litellm_key_encrypted;
 ALTER TABLE file_repository ADD COLUMN IF NOT EXISTS detection_error TEXT;
 ALTER TABLE tender_evaluations ADD COLUMN IF NOT EXISTS technical_ai_title TEXT;
 ALTER TABLE tender_evaluations ADD COLUMN IF NOT EXISTS technical_ai_content TEXT;
@@ -166,12 +168,11 @@ class PostgresRepository:
                 await cursor.execute(MIGRATION_SQL)
             await connection.commit()
 
-    async def ensure_admin(self, email: str, password_hash: str, litellm_key_encrypted: str | None = None) -> None:
+    async def ensure_admin(self, email: str, password_hash: str) -> None:
         """
-        Bootstrap the one admin account from ADMIN_EMAIL/ADMIN_PASSWORD (+ ADMIN_LITELLM_KEY).
-        Never overwrites an existing password hash or LiteLLM key for that email (e.g. if the
-        admin already changed something out-of-band) — on conflict it only ensures role=ADMIN
-        and backfills the LiteLLM key if this admin row doesn't already have one.
+        Bootstrap the one admin account from ADMIN_EMAIL/ADMIN_PASSWORD. Never overwrites an
+        existing password hash for that email (e.g. if the admin already changed it
+        out-of-band) — on conflict it only ensures role=ADMIN.
         """
         if not email:
             return
@@ -179,13 +180,11 @@ class PostgresRepository:
             async with connection.cursor() as cursor:
                 await cursor.execute(
                     '''
-                    INSERT INTO employees (employee_id, name, email, password_hash, role, litellm_key_encrypted)
-                    VALUES (%s, %s, %s, %s, 'ADMIN', %s)
-                    ON CONFLICT (email) DO UPDATE SET
-                        role = 'ADMIN',
-                        litellm_key_encrypted = COALESCE(employees.litellm_key_encrypted, EXCLUDED.litellm_key_encrypted)
+                    INSERT INTO employees (employee_id, name, email, password_hash, role)
+                    VALUES (%s, %s, %s, %s, 'ADMIN')
+                    ON CONFLICT (email) DO UPDATE SET role = 'ADMIN'
                     ''',
-                    (str(uuid4()), 'Admin', email, password_hash, litellm_key_encrypted),
+                    (str(uuid4()), 'Admin', email, password_hash),
                 )
             await connection.commit()
 

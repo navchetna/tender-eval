@@ -7,8 +7,13 @@
 #                                         # the ${...} substitution below, separate from backend.env
 #   cp backend.env.example backend.env   # then fill in every value — this file is gitignored,
 #                                         # never commit real secrets into this directory
+#   cp litellm.env.example litellm.env   # LiteLLM proxy's own master key + ANTHROPIC_API_KEY
 #   docker compose -f install/docker/docker-compose.yaml up -d --build
 #   curl -X POST http://localhost:8011/setup/database   # one-time: creates tables + bootstrap admin
+#
+# The NPU-served Qwen3 (llama.cpp, :8000) and GPU-served LightOnOCR (:8010) model servers are
+# host-native processes, not containers (they need direct device access) — the `litellm` service
+# reaches them via host.docker.internal (extra_hosts below maps that to the host gateway on Linux).
 #
 # Run from the repo root (build.context below is relative to this compose file, i.e. ../..).
 
@@ -39,6 +44,30 @@ services:
       retries: 10
     restart: unless-stopped
 
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    env_file:
+      - ./litellm.env
+    environment:
+      # LiteLLM's own Postgres-backed store (virtual keys, spend tracking, /ui login) — a
+      # dedicated database in the bundled `postgres` service, separate from the app's tables.
+      # host network mode (below) means "postgres" isn't resolvable via compose DNS here —
+      # localhost:5432 works because postgres already publishes that port to the host.
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/litellm
+    volumes:
+      - ./litellm-config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    # npu-qwen3 (OVMS) runs on the Windows side of this WSL2 box, only reachable from WSL via
+    # its localhost-relay — which host.docker.internal / the Docker bridge gateway does NOT
+    # cover (that resolves to the WSL VM itself, a separate network hop the relay doesn't
+    # extend into). Host networking puts this container in the exact same network namespace as
+    # the WSL shell, so its own localhost:8000 hits that same working relay directly.
+    network_mode: host
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
   backend:
     build:
       context: ../..
@@ -56,11 +85,17 @@ services:
       # must be read-write, not read-only. Matches GMAIL_TOKEN_PATH's default of
       # .secrets/gmail-token.json, resolved relative to the container's WORKDIR (/app).
       - ../../.secrets:/app/.secrets
+    # Reaches the LightOnOCR parsing service (:8010, host-native) the same way `litellm` reaches
+    # the NPU model server — see the extra_hosts note on that service above.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8011:8011"
     depends_on:
       postgres:
         condition: service_healthy
+      litellm:
+        condition: service_started
     restart: unless-stopped
 
   frontend:
@@ -70,7 +105,7 @@ services:
       args:
         # Baked into the JS bundle at build time (see frontend/Dockerfile) — changing this
         # requires `docker compose build frontend` again, not just a restart.
-        NEXT_PUBLIC_API_BASE_URL: https://tender-bid-api.mg2.eglb.intel.com
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8011
     ports:
       - "3002:3000"
     depends_on:

@@ -38,7 +38,6 @@ export default function EmployeesPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [litellmKey, setLitellmKey] = useState("");
   const [role, setRole] = useState<Role>("REVIEWER");
   const [submitting, setSubmitting] = useState(false);
 
@@ -47,7 +46,6 @@ export default function EmployeesPage() {
   const [editEmail, setEditEmail] = useState("");
   const [editRole, setEditRole] = useState<Role>("REVIEWER");
   const [editPassword, setEditPassword] = useState("");
-  const [editLitellmKey, setEditLitellmKey] = useState("");
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -117,12 +115,11 @@ export default function EmployeesPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const created = await createEmployee({ name, email, password, litellm_key: litellmKey, role });
+      const created = await createEmployee({ name, email, password, role });
       setEmployees((prev) => (prev ? [...prev, created] : [created]));
       setName("");
       setEmail("");
       setPassword("");
-      setLitellmKey("");
       setRole("REVIEWER");
       toast(`${created.name} added as ${created.role === "ADMIN" ? "admin" : "reviewer"}`);
     } catch (err) {
@@ -138,7 +135,6 @@ export default function EmployeesPage() {
     setEditEmail(emp.email);
     setEditRole(emp.role);
     setEditPassword("");
-    setEditLitellmKey("");
     setEditError(null);
   };
 
@@ -153,7 +149,6 @@ export default function EmployeesPage() {
         email: editEmail,
         role: editRole,
         ...(editPassword ? { password: editPassword } : {}),
-        ...(editLitellmKey ? { litellm_key: editLitellmKey } : {}),
       });
       setEmployees((prev) => prev?.map((e) => (e.employee_id === employeeId ? updated : e)) ?? prev);
       setEditingId(null);
@@ -247,13 +242,6 @@ export default function EmployeesPage() {
                               onChange={(e) => setEditPassword(e.target.value)}
                               placeholder="New password (optional)"
                               className="rounded-[8px] border-[0.5px] border-line-strong bg-surface px-2 py-1 text-[13px] text-ink outline-none focus:border-accent"
-                            />
-                            <input
-                              type="password"
-                              value={editLitellmKey}
-                              onChange={(e) => setEditLitellmKey(e.target.value)}
-                              placeholder="New LiteLLM key (optional)"
-                              className="rounded-[8px] border-[0.5px] border-line-strong bg-surface px-2 py-1 font-mono text-[12px] text-ink outline-none focus:border-accent"
                             />
                             <button
                               type="button"
@@ -383,16 +371,6 @@ export default function EmployeesPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="rounded-[9px] border-[0.5px] border-line-strong bg-surface px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-[12px] font-medium text-ink-soft">LiteLLM key</span>
-                <input
-                  type="password"
-                  required
-                  value={litellmKey}
-                  onChange={(e) => setLitellmKey(e.target.value)}
-                  className="rounded-[9px] border-[0.5px] border-line-strong bg-surface px-3 py-2 font-mono text-[12px] text-ink outline-none focus:border-accent"
                 />
               </label>
               <label className="flex flex-col gap-1">

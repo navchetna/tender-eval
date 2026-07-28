@@ -13,7 +13,7 @@ import logfire
 from ..config import Settings
 from ..evaluation.repository import bid_repository, tender_repository
 from ..evaluation.service import process_pending as process_pending_evaluations
-from ..llm_credentials import worker_llm_credentials
+from ..llm_credentials import fast_llm_credentials
 from .service import process_pending as process_pending_parses
 
 
@@ -30,11 +30,11 @@ async def _run_stage(name: str, coro) -> None:
 
 
 async def run_worker(settings: Settings, stop: asyncio.Event) -> None:
-    """Loop until `stop` is set, running the full pipeline each interval. This loop has no
-    logged-in employee to attribute LLM calls to, so it uses its own dedicated worker key
-    (LITELLM_WORKER_API_KEY) rather than any employee's."""
+    """Loop until `stop` is set, running the full pipeline each interval. Detection and reviewer
+    drafting are extraction/matching/drafting tasks, not judgment, so the worker always uses the
+    fast/local model."""
     logfire.info('pipeline worker started', interval=settings.parse_worker_interval_seconds)
-    creds = worker_llm_credentials(settings)
+    creds = fast_llm_credentials(settings)
     while not stop.is_set():
         await _run_stage('parse', process_pending_parses(settings))
         await _run_stage('evaluate_tender', process_pending_evaluations(creds, settings, tender_repository(settings)))

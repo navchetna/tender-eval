@@ -23,7 +23,6 @@ export interface EmployeeIn {
   name: string;
   email: string;
   password: string;
-  litellm_key: string;
   role: Role;
 }
 
@@ -31,7 +30,6 @@ export interface EmployeeUpdate {
   name?: string;
   email?: string;
   password?: string;
-  litellm_key?: string;
   role?: Role;
 }
 

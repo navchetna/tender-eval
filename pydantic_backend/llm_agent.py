@@ -1,5 +1,5 @@
 """
-Shared pydantic-ai agent construction for the LiteLLM gateway (enterprise agentic toolkit).
+Shared pydantic-ai agent construction for the local LiteLLM gateway.
 
 Every LLM call in this backend goes through a pydantic_ai.Agent — never raw httpx — so the
 whole pipeline shows up as GenAI agent traces in Logfire once `logfire.instrument_pydantic_ai()`
@@ -44,8 +44,8 @@ def structured_agent(
     validated) rather than tool-call-based structured output, matching the plain JSON-mode
     completions this replaces without depending on the gateway model's function-calling support.
     """
-    # No fixed temperature: litellm_model routes through auto_router (config.py), which can land
-    # on an Anthropic model, and Anthropic rejects any temperature other than 1 unless extended
+    # No fixed temperature: the quality tier (llm_credentials.quality_llm_credentials) routes to
+    # an Anthropic model, and Anthropic rejects any temperature other than 1 unless extended
     # thinking is enabled.
     model_settings: dict = {}
     if max_tokens is not None:

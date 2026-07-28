@@ -1,0 +1,27 @@
+# LiteLLM proxy config. The two locally-served models are pinned here (infra, changes with a
+# deploy); the cloud model (claude-eval) is instead added/edited/deleted through the Admin UI
+# (http://<host>:4000/ui) — STORE_MODEL_IN_DB (litellm.env) persists UI-added models to Postgres,
+# which is what makes them editable/deletable from the UI. Models defined directly in this
+# model_list are reloaded from the file on every restart and can't be edited/deleted from the UI
+# (a LiteLLM limitation) — by design for these two, but why claude-eval isn't listed here.
+#
+# `litellm` runs with network_mode: host (docker-compose.yaml), so both entries below use
+# localhost — for npu-qwen3 that's specifically so it reaches the Windows-hosted OVMS instance
+# via WSL2's own localhost relay (host.docker.internal only reaches the WSL VM itself, a hop
+# short of Windows). lightonocr's llama-server is WSL-native, so localhost reaches it directly
+# either way.
+model_list:
+  - model_name: npu-qwen3
+    litellm_params:
+      model: openai/OpenVINO/Qwen3-8B-int4-cw-ov
+      api_base: http://localhost:8000/v3
+      api_key: "not-needed"
+  - model_name: lightonocr
+    litellm_params:
+      model: openai/lightonai/LightOnOCR-2-1B
+      api_base: http://localhost:8080/v1
+      api_key: "not-needed"
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  store_model_in_db: true

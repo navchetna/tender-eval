@@ -12,10 +12,29 @@ whose value is {"content": [...], "children": [...]}. "content" is a list of ite
 from __future__ import annotations
 
 import json
+import re
 from difflib import SequenceMatcher
 from typing import Any
 
 _MATCH_THRESHOLD = 0.55
+
+_LEADING_NUMBERING_RE = re.compile(r'^\s*\d+(?:\.\d+)*[.)]\s*')
+_TRAILING_PAREN_RE = re.compile(r'\s*\([^()]*\)\s*$')
+
+
+def _normalize_heading(text: str) -> str:
+    """Strip decoration (leading numbering, trailing parenthetical refs) that a real TOC
+    heading carries but an LLM's clean heading guess usually doesn't — e.g. turns '6. Price
+    Bid Submission (Ref: Annexure 1, Section 1.4)' into 'Price Bid Submission'. Left
+    unstripped, SequenceMatcher's whole-string ratio is diluted by this extra length and can
+    push a correct match below `_MATCH_THRESHOLD`."""
+    stripped = _LEADING_NUMBERING_RE.sub('', text)
+    while True:
+        without_trailing = _TRAILING_PAREN_RE.sub('', stripped)
+        if without_trailing == stripped:
+            break
+        stripped = without_trailing
+    return stripped.strip()
 
 
 def _flatten(children: list[Any]) -> list[tuple[str, dict]]:
@@ -61,11 +80,12 @@ def find_section(tree_json: bytes | str | dict, heading: str) -> tuple[str | Non
     top_children = root.get('children', []) if isinstance(root, dict) else []
     nodes = _flatten(top_children)
 
+    heading_norm = _normalize_heading(heading).lower()
     best_ratio = 0.0
     best_heading: str | None = None
     best_node: dict | None = None
     for node_heading, node_value in nodes:
-        ratio = SequenceMatcher(None, node_heading.lower(), heading.lower()).ratio()
+        ratio = SequenceMatcher(None, _normalize_heading(node_heading).lower(), heading_norm).ratio()
         if ratio > best_ratio:
             best_ratio, best_heading, best_node = ratio, node_heading, node_value
 

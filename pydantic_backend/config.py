@@ -18,8 +18,8 @@ class Settings(BaseSettings):
     logfire_send: bool = False
     logfire_service_name: str = 'tender-repository-ingestion'
 
-    # --- PDF parser (stage 2): enterprise agentic toolkit's PDF pipeline ---
-    parser_base_url: str = 'https://ei-api.mg2.eglb.intel.com/pdf-pipeline'
+    # --- PDF parser (stage 2): local LightOnOCR (GPU) service, docling-compatible /api/convert contract ---
+    parser_base_url: str = 'http://host.docker.internal:8010'
     parser_user: str = 'tender-bid'
     parser_verify_tls: bool = False
     parser_api_key: SecretStr | None = None
@@ -30,19 +30,19 @@ class Settings(BaseSettings):
     parse_batch_size: int = 5
     parse_max_attempts: int = 3
 
-    # --- Tender/bid evaluation (stage 3): LiteLLM gateway (enterprise agentic toolkit) ---
-    litellm_base_url: str = 'https://ei-api.mg2.eglb.intel.com/v1'
-    litellm_model: str = 'auto_router'
+    # --- Tender/bid evaluation (stage 3): local LiteLLM proxy, fronting NPU-served Qwen3
+    # (fast: extraction/matching/drafting) and Claude (quality: judgment/scoring/comparison) ---
+    litellm_base_url: str = 'http://litellm:4000'
+    litellm_master_key: SecretStr
+    litellm_fast_model: str = 'npu-qwen3'
+    litellm_quality_model: str = 'claude-eval'
     litellm_verify_tls: bool = False
-    litellm_key_encryption_key: SecretStr  # Fernet key: encrypts each employee's stored LiteLLM key
-    litellm_worker_api_key: SecretStr  # used only by the unattended background pipeline worker
     reviewer_email: str = ''
     eval_batch_size: int = 5
 
     # --- Auth (stage 4): HTTP Basic, bootstrapped admin account ---
     admin_email: str = ''
     admin_password: SecretStr = SecretStr('')
-    admin_litellm_key: SecretStr = SecretStr('')  # bootstrapped onto the admin employee row, same as password
 
     # --- CORS (stage 5): browser origins allowed to call this API directly ---
     cors_origins: list[str] = ['http://localhost:3000']

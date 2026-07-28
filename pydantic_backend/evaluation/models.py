@@ -93,18 +93,16 @@ class EmployeeIn(BaseModel):
     name: str
     email: str
     password: str
-    litellm_key: str  # enterprise agentic toolkit key assigned to this employee; write-only
     role: Role = Role.reviewer
 
 
 class EmployeeUpdate(BaseModel):
     """Body for PATCH /employees/{employee_id}. Only the provided fields are changed;
-    `password`/`litellm_key`, if given, replace the stored hash/encrypted key."""
+    `password`, if given, replaces the stored hash."""
 
     name: str | None = None
     email: str | None = None
     password: str | None = None
-    litellm_key: str | None = None
     role: Role | None = None
 
 

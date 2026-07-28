@@ -9,7 +9,6 @@ from psycopg import errors as pg_errors
 
 from ..config import Settings
 from ..db import pool_connection
-from ..llm_credentials import LlmCredentials, decrypt_key, encrypt_key
 from .models import Employee, EmployeeIn, EmployeeUpdate
 
 
@@ -25,10 +24,6 @@ class EmailAlreadyExistsError(Exception):
     pass
 
 
-class LlmKeyNotConfiguredError(Exception):
-    """Raised when an employee has no LiteLLM key assigned yet — an admin must set one."""
-
-
 @dataclass
 class EmployeeRepository:
     settings: Settings
@@ -36,19 +31,17 @@ class EmployeeRepository:
     async def create_employee(self, employee: EmployeeIn) -> Employee:
         employee_id = str(uuid.uuid4())
         password_hash = bcrypt.hashpw(employee.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-        litellm_key_encrypted = encrypt_key(employee.litellm_key, self.settings)
         async with pool_connection(self.settings) as connection:
             async with connection.cursor() as cursor:
                 await cursor.execute(
                     '''
-                    INSERT INTO employees (employee_id, name, email, password_hash, role, litellm_key_encrypted)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                    INSERT INTO employees (employee_id, name, email, password_hash, role)
+                    VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name,
-                        password_hash = EXCLUDED.password_hash, role = EXCLUDED.role,
-                        litellm_key_encrypted = EXCLUDED.litellm_key_encrypted
+                        password_hash = EXCLUDED.password_hash, role = EXCLUDED.role
                     RETURNING employee_id, name, email, role
                     ''',
-                    (employee_id, employee.name, employee.email, password_hash, employee.role.value, litellm_key_encrypted),
+                    (employee_id, employee.name, employee.email, password_hash, employee.role.value),
                 )
                 row = await cursor.fetchone()
             await connection.commit()
@@ -73,8 +66,6 @@ class EmployeeRepository:
             fields['role'] = update.role.value
         if update.password is not None:
             fields['password_hash'] = bcrypt.hashpw(update.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-        if update.litellm_key is not None:
-            fields['litellm_key_encrypted'] = encrypt_key(update.litellm_key, self.settings)
         if not fields:
             existing = await self.get_employee(employee_id)
             if existing is None:
@@ -120,20 +111,4 @@ class EmployeeRepository:
         if row is None:
             return None
         return Employee(employee_id=str(row['employee_id']), name=row['name'], email=row['email'], role=row['role'])
-
-    async def get_llm_credentials(self, employee_id: str) -> LlmCredentials:
-        """Resolve this employee's own LiteLLM key for use on their behalf. Raises
-        LlmKeyNotConfiguredError if no key has been assigned yet."""
-        async with pool_connection(self.settings) as connection:
-            async with connection.cursor() as cursor:
-                await cursor.execute('SELECT litellm_key_encrypted FROM employees WHERE employee_id = %s', (employee_id,))
-                row = await cursor.fetchone()
-        if row is None or not row['litellm_key_encrypted']:
-            raise LlmKeyNotConfiguredError(employee_id)
-        return LlmCredentials(
-            api_key=decrypt_key(row['litellm_key_encrypted'], self.settings),
-            base_url=self.settings.litellm_base_url,
-            model=self.settings.litellm_model,
-            verify_tls=self.settings.litellm_verify_tls,
-        )
 
