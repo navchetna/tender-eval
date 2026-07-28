@@ -233,7 +233,7 @@ export function MatrixView({ projectId }: { projectId: string }) {
 
   const [project, setProject] = useState<Project | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("technical");
+  const [tab, setTab] = useState<Tab>("comparison");
   const [views, setViews] = useState<Partial<Record<Topic, NormalizedView>>>({});
   const [viewErrors, setViewErrors] = useState<Partial<Record<Topic, string>>>({});
   const [loadingView, setLoadingView] = useState<Partial<Record<Topic, boolean>>>({});
@@ -274,6 +274,17 @@ export function MatrixView({ projectId }: { projectId: string }) {
       setLoadingView((prev) => ({ ...prev, [topic]: false }));
     }
   };
+
+  // Kick every result off as soon as the project loads, rather than waiting for a button
+  // click — each call returns the cached value instantly if one exists, or computes and caches
+  // it otherwise, so this always ends in the data being shown without user interaction.
+  useEffect(() => {
+    if (!project) return;
+    loadView("technical");
+    loadView("price");
+    onCompare();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project]);
 
   const onExport = async () => {
     if (!project) return;
@@ -364,18 +375,14 @@ export function MatrixView({ projectId }: { projectId: string }) {
           const viewError = viewErrors[topic];
           return (
             <div>
-              {!view && (
+              {!view && viewError && !isLoading && (
                 <div className="flex flex-col items-start gap-[10px]">
-                  <p className="text-[12.5px] text-ink-soft">
-                    Aligning bid responses against the tender&apos;s {tab} table requires an LLM pass.
-                  </p>
-                  <LoadDataButton
-                    label={`Show ${tab} comparison`}
-                    loading={isLoading}
-                    onClick={() => loadView(topic)}
-                  />
-                  {viewError && !isLoading && <div className="rounded-[9px] bg-bad-bg px-3 py-2 text-[12.5px] text-bad-fg">{viewError}</div>}
+                  <div className="rounded-[9px] bg-bad-bg px-3 py-2 text-[12.5px] text-bad-fg">{viewError}</div>
+                  <LoadDataButton label="Retry" loading={isLoading} onClick={() => loadView(topic)} />
                 </div>
+              )}
+              {!view && !viewError && (
+                <Empty>Aligning bid responses against the tender&apos;s {tab} table — this can take a little while.</Empty>
               )}
               {view && (
                 <>
@@ -404,19 +411,15 @@ export function MatrixView({ projectId }: { projectId: string }) {
 
       {tab === "comparison" && (
         <div>
-          {!comparison && (
+          {!comparison && comparisonError && !comparing && (
             <div className="flex flex-col items-start gap-[10px]">
-              <p className="text-[12.5px] text-ink-soft">
-                Ask the model for a detailed overview across both technical and price sections together — a score per
-                bidder, explicit pros/cons/precautions, and one overall recommendation.
-              </p>
-              <LoadDataButton label="Generate comparison" loading={comparing} onClick={onCompare} />
-              {comparisonError && !comparing && (
-                <div className="rounded-[9px] bg-bad-bg px-3 py-2 text-[12.5px] text-bad-fg">{comparisonError}</div>
-              )}
+              <div className="rounded-[9px] bg-bad-bg px-3 py-2 text-[12.5px] text-bad-fg">{comparisonError}</div>
+              <LoadDataButton label="Retry" loading={comparing} onClick={onCompare} />
             </div>
           )}
-          {comparing && <Empty>Weighing pros, cons, and precautions across every bidder — this can take a little while.</Empty>}
+          {!comparison && !comparisonError && (
+            <Empty>Weighing pros, cons, and precautions across every bidder — this can take a little while.</Empty>
+          )}
           {comparison && !comparing && (
             <>
               <div className="mb-[12px] flex justify-end">
