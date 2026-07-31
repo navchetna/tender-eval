@@ -101,3 +101,5 @@ out
 Thumbs.db
 .secrets/
 .secrets/
+
+graphify*

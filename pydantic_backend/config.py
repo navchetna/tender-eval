@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     # (fast: extraction/matching/drafting) and Claude (quality: judgment/scoring/comparison) ---
     litellm_base_url: str = 'http://litellm:4000'
     litellm_master_key: SecretStr
-    litellm_fast_model: str = 'npu-qwen3'
+    litellm_fast_model: str = 'npu-qwen3-4b'
     litellm_quality_model: str = 'claude-eval'
     litellm_verify_tls: bool = False
     reviewer_email: str = ''

@@ -11,12 +11,12 @@
 # short of Windows). lightonocr's llama-server is WSL-native, so localhost reaches it directly
 # either way.
 model_list:
-  - model_name: npu-qwen3
+  - model_name: npu-qwen3-4b
     litellm_params:
-      model: openai/OpenVINO/Qwen3-8B-int4-cw-ov
+      model: openai/ervin0307/Qwen3-4B-Instruct-2507-int4-ov
       api_base: http://localhost:8000/v3
       api_key: "not-needed"
-  - model_name: lightonocr
+  - model_name: lightonocr-1b
     litellm_params:
       model: openai/lightonai/LightOnOCR-2-1B
       api_base: http://localhost:8080/v1
