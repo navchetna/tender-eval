@@ -6,7 +6,11 @@ import asyncio
 import logfire
 
 from ..config import Settings
+from ..evaluation.models import DocType
+from ..evaluation.repository import bid_repository, tender_repository
+from ..evaluation.service import detect_and_store
 from ..ingestion import drive
+from ..llm_credentials import LlmCredentials
 from .client import ParserClient
 from .models import ParseArtifacts, ParseOutcome, ParseStatus, PendingFile
 from .repository import ParsingRepository
@@ -77,13 +81,39 @@ async def _store_artifacts(
     )
 
 
+async def _trigger_detection(settings: Settings, creds: LlmCredentials, file: PendingFile) -> None:
+    """
+    Kick off section detection for this file immediately, right after its own parse
+    completes — rather than waiting for the next worker tick's catch-up pass, which only
+    starts once every file in the current parse batch is done. Lets a document that parses
+    quickly get detected right away instead of queueing behind slower siblings.
+
+    Never raises: parsing already succeeded by the time this is called, so a detection
+    failure here must not be mistaken for a parse failure. `detect_and_store` itself already
+    records failures on `detection_error` and returns None rather than raising; the try/except
+    here is just an extra guard against anything upstream of it (e.g. picking a repository).
+    """
+    try:
+        if file.file_type not in (DocType.tender.value, DocType.bid.value):
+            return
+        repository = tender_repository(settings) if file.file_type == DocType.tender.value else bid_repository(settings)
+        eval_file = await repository.get_file_for_retry(file.file_id)
+        if eval_file is None:
+            return
+        await detect_and_store(creds, settings, repository, eval_file)
+    except Exception:  # noqa: BLE001 — best-effort; the parse outcome must stand regardless
+        logfire.exception('parsing.process_file: inline detection trigger failed', file_id=file.file_id)
+
+
 async def process_file(
     file: PendingFile,
     settings: Settings,
     repository: ParsingRepository,
     client: ParserClient,
+    creds: LlmCredentials,
 ) -> ParseOutcome:
-    """Parse one already-claimed (PARSING) file and record the outcome."""
+    """Parse one already-claimed (PARSING) file and record the outcome. On success, immediately
+    triggers section detection for this same file (see `_trigger_detection`)."""
     with logfire.span('parsing.process_file', file_id=file.file_id, file_name=file.file_name):
         try:
             content = await asyncio.to_thread(drive.download_file, settings, file.drive_file_id)
@@ -102,6 +132,7 @@ async def process_file(
 
             artifacts = await _store_artifacts(settings, file, client, job_id)
             await repository.mark_parsed(file.file_id, artifacts)
+            await _trigger_detection(settings, creds, file)
             return ParseOutcome(
                 file_id=file.file_id, file_name=file.file_name,
                 status=ParseStatus.completed, parse_job_id=job_id,
@@ -115,7 +146,7 @@ async def process_file(
             )
 
 
-async def retry_file(settings: Settings, file_id: str) -> ParseOutcome:
+async def retry_file(settings: Settings, file_id: str, creds: LlmCredentials) -> ParseOutcome:
     """Manually retry parsing for one specific PARSE_FAILED file, bypassing the automatic
     attempt cap (see `ParsingRepository.claim_file_for_retry`). Raises ValueError if the file
     isn't currently in a retryable state."""
@@ -124,20 +155,22 @@ async def retry_file(settings: Settings, file_id: str) -> ParseOutcome:
     if file is None:
         raise ValueError('File is not in a retryable parse-failed state')
     async with ParserClient(settings) as client:
-        return await process_file(file, settings, repository, client)
+        return await process_file(file, settings, repository, client, creds)
 
 
-async def process_pending(settings: Settings) -> list[ParseOutcome]:
+async def process_pending(settings: Settings, creds: LlmCredentials) -> list[ParseOutcome]:
     """Claim a batch of pending files and process them concurrently.
 
     Each file downloads/submits/polls/uploads independently — process_file never shares
     mutable state across files (ParsingRepository opens a fresh connection per call, and
     httpx.AsyncClient is safe for concurrent requests), so there's no need to serialize them.
+    Because they're concurrent, a file that finishes parsing early already triggers its own
+    detection (see `_trigger_detection`) without waiting on slower siblings in the same batch.
     """
     repository = ParsingRepository(settings)
     files = await repository.claim_pending_files(settings.parse_batch_size)
     if not files:
         return []
     async with ParserClient(settings) as client:
-        outcomes = await asyncio.gather(*(process_file(file, settings, repository, client) for file in files))
+        outcomes = await asyncio.gather(*(process_file(file, settings, repository, client, creds) for file in files))
     return list(outcomes)
