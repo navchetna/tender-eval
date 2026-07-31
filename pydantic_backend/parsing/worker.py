@@ -36,7 +36,7 @@ async def run_worker(settings: Settings, stop: asyncio.Event) -> None:
     logfire.info('pipeline worker started', interval=settings.parse_worker_interval_seconds)
     creds = fast_llm_credentials(settings)
     while not stop.is_set():
-        await _run_stage('parse', process_pending_parses(settings))
+        await _run_stage('parse', process_pending_parses(settings, creds))
         await _run_stage('evaluate_tender', process_pending_evaluations(creds, settings, tender_repository(settings)))
         await _run_stage('evaluate_bid', process_pending_evaluations(creds, settings, bid_repository(settings)))
         try:

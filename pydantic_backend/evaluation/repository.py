@@ -114,6 +114,29 @@ class EvaluationRepository:
                 )
             await connection.commit()
 
+    async def list_unnotified(self, limit: int) -> list[dict]:
+        """
+        Evaluations of this doc_type that exist but haven't been notified yet — decoupled from
+        whether detection just ran in this same pass, since detection can now also complete
+        inline right after parsing (see parsing/service.py), well before this stage's next tick.
+        """
+        async with pool_connection(self.settings) as connection:
+            async with connection.cursor() as cursor:
+                await cursor.execute(
+                    f'''
+                    SELECT e.evaluation_id, e.file_id, e.project_id, e.version,
+                           e.technical_section_title, e.price_section_title, f.file_name
+                    FROM {self._table} e
+                    JOIN file_repository f ON f.file_id = e.file_id
+                    WHERE e.notified_at IS NULL
+                    ORDER BY e.created_at
+                    LIMIT %s
+                    ''',
+                    (limit,),
+                )
+                rows = await cursor.fetchall()
+        return rows
+
     async def mark_notified(self, evaluation_id: str) -> None:
         async with pool_connection(self.settings) as connection:
             async with connection.cursor() as cursor:

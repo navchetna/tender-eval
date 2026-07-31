@@ -47,7 +47,7 @@ class ParsingRepository:
                     FROM claimed
                     WHERE f.file_id = claimed.file_id
                     RETURNING f.file_id, f.file_name, f.drive_file_id, f.mime_type,
-                              f.drive_folder_id AS version_folder_id, f.parse_attempts
+                              f.drive_folder_id AS version_folder_id, f.parse_attempts, f.file_type
                     ''',
                     (self.settings.parse_max_attempts, limit),
                 )
@@ -73,7 +73,7 @@ class ParsingRepository:
                         updated_at = now()
                     WHERE file_id = %s AND processing_status = 'PARSE_FAILED'
                     RETURNING file_id, file_name, drive_file_id, mime_type,
-                              drive_folder_id AS version_folder_id, parse_attempts
+                              drive_folder_id AS version_folder_id, parse_attempts, file_type
                     ''',
                     (file_id,),
                 )

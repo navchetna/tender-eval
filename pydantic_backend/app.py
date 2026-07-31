@@ -147,10 +147,14 @@ async def poll_gmail(max_results: int = 20, _admin: CurrentUser = Depends(requir
 
 
 @app.post('/parsing/process-pending')
-async def parsing_process_pending(_admin: CurrentUser = Depends(require_admin)) -> list[dict]:
-    """Claim a batch of unparsed PDFs, run them through the parser, and store results."""
+async def parsing_process_pending(
+    _admin: CurrentUser = Depends(require_admin), creds: LlmCredentials = Depends(get_fast_llm_credentials)
+) -> list[dict]:
+    """Claim a batch of unparsed PDFs, run them through the parser, and store results. Each
+    file that parses successfully also triggers its own section detection immediately (see
+    parsing/service.py), rather than waiting for the worker's next catch-up tick."""
     try:
-        outcomes = await process_pending(get_settings())
+        outcomes = await process_pending(get_settings(), creds)
         return [outcome.model_dump(mode='json') for outcome in outcomes]
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(422, str(exc)) from exc
@@ -794,7 +798,7 @@ async def retry_file_stage(
     settings = get_settings()
     try:
         if file['processing_status'] == 'PARSE_FAILED':
-            await retry_parse_file(settings, file_id)
+            await retry_parse_file(settings, file_id, creds)
         elif file['file_type'] in (FileType.tender.value, FileType.bid.value):
             repository = tender_repository(settings) if file['file_type'] == FileType.tender.value else bid_repository(settings)
             await retry_evaluation_file(creds, settings, repository, file_id)

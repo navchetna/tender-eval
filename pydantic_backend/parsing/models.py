@@ -25,6 +25,7 @@ class PendingFile(BaseModel):
     mime_type: str
     version_folder_id: str
     parse_attempts: int
+    file_type: str
 
 
 class ParseArtifacts(BaseModel):
