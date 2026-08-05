@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowLeft, Award, ExternalLink, FileText, LayoutGrid, Upload } from "lucide-react";
+import { ArrowLeft, Award, ExternalLink, FileText, LayoutGrid, Upload, UserPlus, Users, X } from "lucide-react";
 import {
   ApiError,
   getEvaluationsByProject,
@@ -64,17 +64,93 @@ function TypeSelect({
   );
 }
 
+function IconBadge({ icon }: { icon: ReactNode }) {
+  return (
+    <span className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[8px] bg-accent-bg text-accent">
+      {icon}
+    </span>
+  );
+}
+
+function FileDropzone({
+  label,
+  icon,
+  accept,
+  multiple,
+  files,
+  onPick,
+  onRemove,
+}: {
+  label: string;
+  icon: ReactNode;
+  accept: string;
+  multiple?: boolean;
+  files: File[];
+  onPick: (files: FileList | null) => void;
+  onRemove: (index: number) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <div className="flex min-w-[240px] flex-1 flex-col gap-[7px]">
+      <span className="flex items-center gap-[8px] text-[12px] font-medium text-ink-soft">
+        <IconBadge icon={icon} />
+        {label}
+      </span>
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        className="btn flex cursor-pointer items-center gap-[8px] rounded-[9px] border-[1.5px] border-dashed border-line-strong bg-surface2 px-3 py-[10px] text-left text-[12.5px] text-ink-faint hover:border-accent hover:text-accent"
+      >
+        <Upload size={14} className="shrink-0" />
+        {multiple ? "Click to choose PDFs" : "Click to choose a PDF"}
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        multiple={multiple}
+        onChange={(e) => {
+          onPick(e.target.files);
+          e.target.value = "";
+        }}
+        className="hidden"
+      />
+      {files.length > 0 && (
+        <div className="flex flex-col gap-[5px]">
+          {files.map((f, i) => (
+            <div
+              key={`${f.name}-${i}`}
+              className="flex items-center gap-[6px] rounded-[7px] bg-accent-bg px-[8px] py-[5px] text-[11.5px] text-accent-ink"
+            >
+              <FileText size={12} className="shrink-0" />
+              <span className="flex-1 truncate font-mono">{f.name}</span>
+              <button
+                type="button"
+                onClick={() => onRemove(i)}
+                className="btn cursor-pointer rounded-md border-none bg-transparent p-[2px] text-accent-ink/70 hover:text-bad-fg"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function UploadForm({ projectId, onUploaded }: { projectId: string; onUploaded: () => void }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [tenderFile, setTenderFile] = useState<File | null>(null);
-  const [bidFiles, setBidFiles] = useState<FileList | null>(null);
+  const [bidFiles, setBidFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const bids = bidFiles ? Array.from(bidFiles) : [];
+    const bids = bidFiles;
     if (!tenderFile && bids.length === 0) {
       setError("Choose a tender PDF, one or more bid PDFs, or both");
       return;
@@ -98,7 +174,7 @@ function UploadForm({ projectId, onUploaded }: { projectId: string; onUploaded: 
       }
       toast(`Uploaded ${uploadedCount} file${uploadedCount === 1 ? "" : "s"} as a new version`);
       setTenderFile(null);
-      setBidFiles(null);
+      setBidFiles([]);
       setOpen(false);
       onUploaded();
     } catch (err) {
@@ -122,43 +198,140 @@ function UploadForm({ projectId, onUploaded }: { projectId: string; onUploaded: 
 
   return (
     <Card className="mb-4 p-4">
-      <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1">
-          <span className="text-[12px] font-medium text-ink-soft">Tender PDF</span>
-          <input
-            type="file"
+      <form onSubmit={onSubmit} className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-start gap-3">
+          <FileDropzone
+            label="Tender PDF"
+            icon={<FileText size={14} />}
             accept="application/pdf"
-            onChange={(e) => setTenderFile(e.target.files?.[0] ?? null)}
-            className="text-[12.5px] text-ink"
+            files={tenderFile ? [tenderFile] : []}
+            onPick={(files) => setTenderFile(files?.[0] ?? null)}
+            onRemove={() => setTenderFile(null)}
           />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-[12px] font-medium text-ink-soft">Bid PDFs</span>
-          <input
-            type="file"
+          <FileDropzone
+            label="Bid PDFs"
+            icon={<Users size={14} />}
             accept="application/pdf"
             multiple
-            onChange={(e) => setBidFiles(e.target.files)}
-            className="text-[12.5px] text-ink"
+            files={bidFiles}
+            onPick={(files) => {
+              const picked = files ? Array.from(files) : [];
+              setBidFiles((prev) => [...prev, ...picked]);
+            }}
+            onRemove={(index) => setBidFiles((prev) => prev.filter((_, i) => i !== index))}
           />
-        </label>
-        <button
-          type="submit"
-          disabled={submitting}
-          className="btn cursor-pointer rounded-[9px] border-none bg-accent px-4 py-2 text-[13px] font-medium text-white disabled:opacity-60"
-        >
-          {submitting ? "Uploading…" : "Upload as new version"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="btn cursor-pointer rounded-[9px] border-[0.5px] border-line-strong bg-surface px-4 py-2 text-[13px] text-ink"
-        >
-          Cancel
-        </button>
-        {error && <div className="w-full rounded-[9px] bg-bad-bg px-3 py-2 text-[12px] text-bad-fg">{error}</div>}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="submit"
+            disabled={submitting}
+            className="btn cursor-pointer rounded-[9px] border-none bg-accent px-4 py-2 text-[13px] font-medium text-white disabled:opacity-60"
+          >
+            {submitting ? "Uploading…" : "Upload as new version"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="btn cursor-pointer rounded-[9px] border-[0.5px] border-line-strong bg-surface px-4 py-2 text-[13px] text-ink"
+          >
+            Cancel
+          </button>
+        </div>
+        {error && <div className="rounded-[9px] bg-bad-bg px-3 py-2 text-[12px] text-bad-fg">{error}</div>}
       </form>
     </Card>
+  );
+}
+
+function AddBidderForm({ projectId, onUploaded }: { projectId: string; onUploaded: () => void }) {
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [bidFiles, setBidFiles] = useState<File[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const close = () => {
+    setOpen(false);
+    setBidFiles([]);
+    setError(null);
+  };
+
+  const onSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (bidFiles.length === 0) {
+      setError("Choose one or more bid PDFs");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      // new_version=false: these bidders join the current round's existing Drive folder,
+      // instead of UploadForm's "new round" path which always starts a fresh version.
+      const uploaded = await uploadProjectFiles(projectId, bidFiles, "BID", false);
+      toast(`Added ${uploaded.length} bidder${uploaded.length === 1 ? "" : "s"} to the current round`);
+      close();
+      onUploaded();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Upload failed");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="btn flex cursor-pointer items-center gap-[6px] rounded-[8px] border-[0.5px] border-line-strong bg-surface px-[10px] py-[5px] text-[11.5px] text-ink"
+      >
+        <UserPlus size={13} />
+        Add bidder
+      </button>
+      {open && (
+        // Rendered as a fixed overlay (not inline) so opening it never reflows the
+        // Bidders card or anything else on the page.
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(32,32,28,.4)] px-4" onClick={close}>
+          <div
+            className="expand w-full max-w-[440px] rounded-[13px] border-[0.5px] border-line bg-surface p-5 shadow-[0_20px_60px_-15px_rgba(30,28,24,.4)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 text-[15px] font-semibold text-ink">Add bidder to the current round</div>
+            <form onSubmit={onSubmit} className="flex flex-col gap-[12px]">
+              <FileDropzone
+                label="Bid PDFs"
+                icon={<Users size={14} />}
+                accept="application/pdf"
+                multiple
+                files={bidFiles}
+                onPick={(files) => {
+                  const picked = files ? Array.from(files) : [];
+                  setBidFiles((prev) => [...prev, ...picked]);
+                }}
+                onRemove={(index) => setBidFiles((prev) => prev.filter((_, i) => i !== index))}
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={close}
+                  disabled={submitting}
+                  className="btn cursor-pointer rounded-[9px] border-[0.5px] border-line-strong bg-surface px-4 py-2 text-[13px] text-ink disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="btn cursor-pointer rounded-[9px] border-none bg-accent px-4 py-2 text-[13px] font-medium text-white disabled:opacity-60"
+                >
+                  {submitting ? "Adding…" : "Add to current round"}
+                </button>
+              </div>
+              {error && <div className="rounded-[9px] bg-bad-bg px-3 py-2 text-[12px] text-bad-fg">{error}</div>}
+            </form>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -436,7 +609,12 @@ export function Workspace({ projectId }: { projectId: string }) {
         </div>
 
         <div>
-          <SectionLabel>Bidders</SectionLabel>
+          <div className="mb-[9px] flex items-center justify-between">
+            <SectionLabel>Bidders</SectionLabel>
+            {user?.role === "ADMIN" && viewVersion === project.current_version && (
+              <AddBidderForm projectId={projectId} onUploaded={onUploaded} />
+            )}
+          </div>
           <Card className="overflow-hidden">
             {bids.length === 0 && <Empty>No bids received yet.</Empty>}
             {bids.map((b, i) => {

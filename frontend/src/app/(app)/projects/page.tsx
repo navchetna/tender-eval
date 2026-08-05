@@ -373,7 +373,7 @@ export default function ProjectsPage() {
               </div>
               <div className="text-[16px] font-semibold text-ink">{project.project_name}</div>
               <div className="my-[10px] flex items-center gap-2 text-[12.5px] text-ink-soft">
-                <span>Tender v{project.current_version}</span>
+                <span>Tender v{project.current_version || 1}</span>
                 <span className="text-line-strong">·</span>
                 <span>
                   {bidCount} {bidCount === 1 ? "bid" : "bids"}
