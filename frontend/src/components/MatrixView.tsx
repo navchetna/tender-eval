@@ -2,9 +2,17 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Download, Loader2, Sparkles } from "lucide-react";
-import { ApiError, compareBids, exportMatrix, getNormalizedView, getProjects } from "@/lib/api";
-import type { ComparisonResult, NormalizedView, Project, Topic } from "@/lib/types";
+import { ArrowLeft, Download, Loader2, Sparkles, Terminal } from "lucide-react";
+import {
+  ApiError,
+  compareBids,
+  exportMatrix,
+  getDefaultPrompts,
+  getNormalizedView,
+  getProjects,
+  scoreSection,
+} from "@/lib/api";
+import type { ComparisonResult, DefaultPrompts, NormalizedView, Project, SectionScoreResult, Topic } from "@/lib/types";
 import { Card } from "@/components/ui/Card";
 import { Empty } from "@/components/ui/Empty";
 import { toneClasses } from "@/lib/tone";
@@ -160,6 +168,106 @@ function scoreTone(score: number): "ok" | "warn" | "bad" {
   return "bad";
 }
 
+/** Shows the exact prompt an evaluation/scoring step will use, and lets a reviewer either run
+it as-is or override it with their own wording for that one run — never silently guessing on
+the model's behalf. */
+function PromptControl({
+  defaultPrompt,
+  running,
+  runLabel,
+  onRun,
+}: {
+  defaultPrompt: string | undefined;
+  running: boolean;
+  runLabel: string;
+  onRun: (promptOverride?: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  // null = showing the default prompt as-is (tracks `defaultPrompt` as it arrives from the
+  // API); once the reviewer types, this holds their edit instead and no longer follows it.
+  const [edited, setEdited] = useState<string | null>(null);
+  const prompt = edited ?? defaultPrompt ?? "";
+  const isCustom = edited !== null && defaultPrompt !== undefined && edited.trim() !== defaultPrompt.trim();
+
+  return (
+    <div className="flex flex-col items-end gap-[8px]">
+      <div className="flex items-center gap-[8px]">
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          disabled={defaultPrompt === undefined}
+          className="btn flex items-center gap-[6px] rounded-[9px] border-[0.5px] border-line-strong bg-surface px-[12px] py-[6px] text-[12px] text-ink-soft disabled:opacity-60"
+        >
+          <Terminal size={13} />
+          {expanded ? "Hide prompt" : "Show prompt"}
+        </button>
+        <button
+          onClick={() => onRun(isCustom ? prompt : undefined)}
+          disabled={running || defaultPrompt === undefined}
+          className="btn flex items-center gap-[6px] rounded-[9px] border-[0.5px] border-line-strong bg-surface px-[12px] py-[6px] text-[12px] text-ink disabled:opacity-60"
+        >
+          {running ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+          {running ? "Working…" : isCustom ? `${runLabel} with custom prompt` : runLabel}
+        </button>
+      </div>
+      {expanded && (
+        <div className="w-full rounded-[9px] border-[0.5px] border-line-strong bg-surface2 p-[10px]">
+          <textarea
+            value={prompt}
+            onChange={(e) => setEdited(e.target.value)}
+            rows={6}
+            className="w-full resize-y rounded-[7px] border-[0.5px] border-line-strong bg-surface px-[10px] py-[8px] font-mono text-[11.5px] leading-[1.5] text-ink outline-none focus:border-accent"
+          />
+          <div className="mt-[6px] flex items-center justify-between gap-2">
+            <span className="text-[11px] text-ink-faint">
+              {isCustom ? "Custom prompt — runs fresh, not cached." : "Default prompt — edit it to run with your own wording."}
+            </span>
+            {isCustom && (
+              <button
+                type="button"
+                onClick={() => setEdited(null)}
+                className="btn shrink-0 cursor-pointer rounded-md border-none bg-transparent p-0 text-[11px] text-accent"
+              >
+                Reset to default
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SectionScorePanel({ result }: { result: SectionScoreResult }) {
+  if (result.scores.length === 0) {
+    return <Empty>No approved bidder responses to score yet.</Empty>;
+  }
+  return (
+    <div>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-[12px]">
+        {result.scores.map((s) => {
+          const tn = toneClasses[scoreTone(s.score)];
+          return (
+            <Card key={s.bidder} className="p-[15px]">
+              <div className="mb-[8px] flex items-center justify-between gap-2">
+                <span className="truncate text-[14px] font-semibold text-ink">{s.bidder}</span>
+                <span className={`shrink-0 rounded-full px-2 py-[2px] text-[12px] font-semibold ${tn.bg} ${tn.fg}`}>{s.score}/100</span>
+              </div>
+              <p className="m-0 text-[12px] leading-[1.5] text-ink-soft">{s.reasoning}</p>
+            </Card>
+          );
+        })}
+      </div>
+      {result.comparison && (
+        <Card className="mt-[12px] p-[15px]">
+          <div className="mb-[5px] text-[11px] tracking-[0.3px] text-ink-faint uppercase">How these scores compare</div>
+          <div className="font-serif text-[13.5px] leading-[1.6] text-ink-soft">{result.comparison}</div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 function ComparisonPanel({ result }: { result: ComparisonResult }) {
   if (result.assessments.length === 0) {
     return <Empty>No approved bidder responses to compare yet.</Empty>;
@@ -241,6 +349,10 @@ export function MatrixView({ projectId }: { projectId: string }) {
   const [comparing, setComparing] = useState(false);
   const [comparisonError, setComparisonError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [defaultPrompts, setDefaultPrompts] = useState<DefaultPrompts | null>(null);
+  const [scores, setScores] = useState<Partial<Record<Topic, SectionScoreResult>>>({});
+  const [scoring, setScoring] = useState<Partial<Record<Topic, boolean>>>({});
+  const [scoreErrors, setScoreErrors] = useState<Partial<Record<Topic, string>>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -257,6 +369,18 @@ export function MatrixView({ projectId }: { projectId: string }) {
       cancelled = true;
     };
   }, [projectId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getDefaultPrompts()
+      .then((p) => {
+        if (!cancelled) setDefaultPrompts(p);
+      })
+      .catch(() => undefined); // prompt display is a nicety — a failed fetch just leaves the "Show prompt" control disabled
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const loadView = async (topic: Topic): Promise<NormalizedView | null> => {
     if (!project) return null;
@@ -298,17 +422,32 @@ export function MatrixView({ projectId }: { projectId: string }) {
     }
   };
 
-  const onCompare = async () => {
+  const onCompare = async (promptOverride?: string) => {
     if (!project) return;
     setComparing(true);
     setComparisonError(null);
     try {
-      const result = await compareBids(projectId, project.current_version);
+      const result = await compareBids(projectId, project.current_version, promptOverride);
       setComparison(result);
     } catch (err) {
       setComparisonError(err instanceof ApiError ? err.message : "Comparison failed");
     } finally {
       setComparing(false);
+    }
+  };
+
+  const onScore = async (topic: Topic, promptOverride?: string) => {
+    if (!project) return;
+    setScoring((prev) => ({ ...prev, [topic]: true }));
+    setScoreErrors((prev) => ({ ...prev, [topic]: undefined }));
+    try {
+      const result = await scoreSection(projectId, project.current_version, topic, promptOverride);
+      setScores((prev) => ({ ...prev, [topic]: result }));
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Scoring failed";
+      setScoreErrors((prev) => ({ ...prev, [topic]: message }));
+    } finally {
+      setScoring((prev) => ({ ...prev, [topic]: false }));
     }
   };
 
@@ -386,6 +525,24 @@ export function MatrixView({ projectId }: { projectId: string }) {
               )}
               {view && (
                 <>
+                  <Card className="mb-[14px] p-[15px]">
+                    <div className="mb-[10px] flex flex-wrap items-center justify-between gap-[10px]">
+                      <div className="text-[13px] font-semibold text-ink">Section score — on what basis this section was scored</div>
+                      <PromptControl
+                        defaultPrompt={defaultPrompts?.[topic]}
+                        running={!!scoring[topic]}
+                        runLabel="Run scoring"
+                        onRun={(override) => onScore(topic, override)}
+                      />
+                    </div>
+                    {scoreErrors[topic] && (
+                      <div className="mb-[10px] rounded-[9px] bg-bad-bg px-3 py-2 text-[12.5px] text-bad-fg">{scoreErrors[topic]}</div>
+                    )}
+                    {!scores[topic] && !scoreErrors[topic] && (
+                      <Empty>Not scored yet — run it above with the default prompt, or edit it first.</Empty>
+                    )}
+                    {scores[topic] && <SectionScorePanel result={scores[topic]!} />}
+                  </Card>
                   <div className="mb-[10px] flex items-center justify-between">
                     {tab === "price" && (
                       <div className="flex items-center gap-[6px] text-[12px] text-ink-soft">
@@ -414,7 +571,7 @@ export function MatrixView({ projectId }: { projectId: string }) {
           {!comparison && comparisonError && !comparing && (
             <div className="flex flex-col items-start gap-[10px]">
               <div className="rounded-[9px] bg-bad-bg px-3 py-2 text-[12.5px] text-bad-fg">{comparisonError}</div>
-              <LoadDataButton label="Retry" loading={comparing} onClick={onCompare} />
+              <LoadDataButton label="Retry" loading={comparing} onClick={() => onCompare()} />
             </div>
           )}
           {!comparison && !comparisonError && (
@@ -423,13 +580,12 @@ export function MatrixView({ projectId }: { projectId: string }) {
           {comparison && !comparing && (
             <>
               <div className="mb-[12px] flex justify-end">
-                <button
-                  onClick={onCompare}
-                  className="btn flex items-center gap-[6px] rounded-[9px] border-[0.5px] border-line-strong bg-surface px-[12px] py-[6px] text-[12px] text-ink"
-                >
-                  <Sparkles size={13} />
-                  Regenerate
-                </button>
+                <PromptControl
+                  defaultPrompt={defaultPrompts?.comparison}
+                  running={comparing}
+                  runLabel="Regenerate"
+                  onRun={(override) => onCompare(override)}
+                />
               </div>
               <ComparisonPanel result={comparison} />
             </>

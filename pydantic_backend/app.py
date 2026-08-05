@@ -32,7 +32,7 @@ from .normalization import excel as normalization_excel
 from .normalization import llm_result_cache
 from .normalization import score_client as normalization_score_client
 from .normalization import service as normalization_service
-from .normalization.models import ComparisonResult, MatrixData, NormalizedView, SectionScoreResult
+from .normalization.models import ComparisonResult, DefaultPrompts, MatrixData, NormalizedView, PromptOverride, SectionScoreResult
 from .observability import configure_observability
 from .parsing.models import ParseArtifacts
 from .parsing.models import PendingFile as ParsingPendingFile
@@ -448,43 +448,64 @@ async def normalization_export(
     )
 
 
+@app.get('/normalization/prompts')
+async def normalization_prompts(user: CurrentUser = Depends(get_current_user)) -> DefaultPrompts:
+    """The default prompts behind Technical/Price scoring and the cross-bid comparison step —
+    lets the compliance-matrix UI show a reviewer what will run before they choose to override it."""
+    return DefaultPrompts(
+        technical=normalization_score_client.DEFAULT_SYSTEM_PROMPT,
+        price=normalization_score_client.DEFAULT_SYSTEM_PROMPT,
+        comparison=normalization_compare_client.DEFAULT_SYSTEM_PROMPT,
+    )
+
+
 @app.post('/normalization/{project_id}/{version}/score/{topic}')
 async def normalization_score(
     project_id: str, version: int, topic: Topic,
+    body: PromptOverride | None = None,
     user: CurrentUser = Depends(get_current_user), creds: LlmCredentials = Depends(get_llm_credentials),
 ) -> SectionScoreResult:
     """Ask an LLM to holistically score every approved bidder's whole technical or price
     section against the tender, with reasoning per bidder and a comparative narrative across
-    all of them. Cached the same way as the normalized view — see llm_result_cache."""
+    all of them. Cached the same way as the normalized view — see llm_result_cache — unless a
+    custom prompt override is given, in which case the result is computed fresh and not cached,
+    since it's no longer a pure function of the approved section content alone."""
     await _ensure_project_access(project_id, user)
     settings = get_settings()
-    cached = await llm_result_cache.get_cached(settings, project_id, version, 'score', topic.value)
-    if cached is not None:
-        return SectionScoreResult.model_validate(cached)
+    custom_prompt = (body.prompt or '').strip() if body else ''
+    if not custom_prompt:
+        cached = await llm_result_cache.get_cached(settings, project_id, version, 'score', topic.value)
+        if cached is not None:
+            return SectionScoreResult.model_validate(cached)
     view = await _build_normalized_view(creds, project_id, version, topic, user)
     try:
-        result = await normalization_score_client.score_section(creds, view)
+        result = await normalization_score_client.score_section(creds, view, custom_prompt or None)
     except Exception as exc:  # noqa: BLE001 — model output failures happen; give a retryable 502, not a 500
         raise HTTPException(502, 'The model failed to produce a valid score — try again.') from exc
-    await llm_result_cache.save_cached(settings, project_id, version, 'score', result.model_dump(mode='json'), topic.value)
+    if not custom_prompt:
+        await llm_result_cache.save_cached(settings, project_id, version, 'score', result.model_dump(mode='json'), topic.value)
     return result
 
 
 @app.post('/normalization/{project_id}/{version}/compare')
 async def normalization_compare(
     project_id: str, version: int,
+    body: PromptOverride | None = None,
     user: CurrentUser = Depends(get_current_user), creds: LlmCredentials = Depends(get_llm_credentials),
 ) -> ComparisonResult:
     """Detailed overall comparison across BOTH technical and price sections together: an
     extended pros/cons/precautions assessment per bidder plus one recommended award. Whichever
     section(s) are approved so far are used; a topic that isn't approved yet is simply left out
     rather than failing the whole request. Cached — see llm_result_cache — same as the other
-    normalization results."""
+    normalization results, unless a custom prompt override is given, in which case the result
+    is computed fresh and not cached."""
     await _ensure_project_access(project_id, user)
     settings = get_settings()
-    cached = await llm_result_cache.get_cached(settings, project_id, version, 'compare')
-    if cached is not None:
-        return ComparisonResult.model_validate(cached)
+    custom_prompt = (body.prompt or '').strip() if body else ''
+    if not custom_prompt:
+        cached = await llm_result_cache.get_cached(settings, project_id, version, 'compare')
+        if cached is not None:
+            return ComparisonResult.model_validate(cached)
 
     async def _try_view(topic: Topic) -> NormalizedView | None:
         try:
@@ -496,10 +517,13 @@ async def normalization_compare(
     if technical_view is None and price_view is None:
         raise HTTPException(422, 'Neither technical nor price sections are approved yet for this project/version')
     try:
-        result = await normalization_compare_client.compare_bids(creds, project_id, version, technical_view, price_view)
+        result = await normalization_compare_client.compare_bids(
+            creds, project_id, version, technical_view, price_view, custom_prompt or None,
+        )
     except Exception as exc:  # noqa: BLE001 — model output failures happen; give a retryable 502, not a 500
         raise HTTPException(502, 'The model failed to produce a valid comparison — try again.') from exc
-    await llm_result_cache.save_cached(settings, project_id, version, 'compare', result.model_dump(mode='json'))
+    if not custom_prompt:
+        await llm_result_cache.save_cached(settings, project_id, version, 'compare', result.model_dump(mode='json'))
     return result
 
 
