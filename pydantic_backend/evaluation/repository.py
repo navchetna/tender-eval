@@ -182,18 +182,22 @@ class EvaluationRepository:
 
     async def list_pending_review(self, employee_id: str | None = None) -> list[EvaluationRecord]:
         """
-        Evaluations still awaiting a technical/price decision. When `employee_id` is given,
-        only evaluations for projects assigned to that reviewer are returned (per-project
-        task delegation); `None` (admin) returns everything, same as before delegation existed.
+        Evaluations still awaiting a technical/price decision, scoped to each project's
+        *current* version — uploading a new round supersedes the previous one, so a version
+        that was never approved before being replaced shouldn't linger in the queue forever
+        alongside the new round's genuinely-pending files. When `employee_id` is given, only
+        evaluations for projects assigned to that reviewer are returned (per-project task
+        delegation); `None` (admin) returns everything, same as before delegation existed.
         """
         query = f'''
             SELECT e.*, f.file_name
             FROM {self._table} e
             JOIN file_repository f ON f.file_id = e.file_id
+            JOIN projects p ON p.project_id = e.project_id AND p.current_version = e.version
         '''
         params: tuple = ()
         if employee_id is not None:
-            query += ' JOIN projects p ON p.project_id = e.project_id AND p.assigned_to = %s'
+            query += ' AND p.assigned_to = %s'
             params = (employee_id,)
         query += " WHERE e.technical_status = 'SUGGESTED' OR e.price_status = 'SUGGESTED' ORDER BY e.created_at"
         async with pool_connection(self.settings) as connection:
@@ -203,13 +207,17 @@ class EvaluationRepository:
         return [_to_record(row) for row in rows]
 
     async def count_pending_review(self, employee_id: str | None = None) -> int:
-        """Same scoping as `list_pending_review` (admin sees everything, a reviewer only their
-        assigned project(s)), but a plain COUNT so a sidebar badge doesn't have to pull every
-        evaluation's full section title/content just to show a number."""
-        query = f'SELECT COUNT(*) AS n FROM {self._table} e'
+        """Same scoping as `list_pending_review` (current version only; admin sees everything,
+        a reviewer only their assigned project(s)), but a plain COUNT so a sidebar badge doesn't
+        have to pull every evaluation's full section title/content just to show a number."""
+        query = f'''
+            SELECT COUNT(*) AS n
+            FROM {self._table} e
+            JOIN projects p ON p.project_id = e.project_id AND p.current_version = e.version
+        '''
         params: tuple = ()
         if employee_id is not None:
-            query += ' JOIN projects p ON p.project_id = e.project_id AND p.assigned_to = %s'
+            query += ' AND p.assigned_to = %s'
             params = (employee_id,)
         query += " WHERE e.technical_status = 'SUGGESTED' OR e.price_status = 'SUGGESTED'"
         async with pool_connection(self.settings) as connection:
