@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Download, Loader2, Sparkles, Terminal } from "lucide-react";
+import { ArrowLeft, Download, Loader2, Sparkles, Terminal, Upload } from "lucide-react";
 import {
   ApiError,
   compareBids,
@@ -170,71 +170,103 @@ function scoreTone(score: number): "ok" | "warn" | "bad" {
 
 /** Shows the exact prompt an evaluation/scoring step will use, and lets a reviewer either run
 it as-is or override it with their own wording for that one run — never silently guessing on
-the model's behalf. */
+the model's behalf. Opens as a popup that hovers over the page instead of pushing content
+around, and carries the single run/regenerate action itself rather than a second button
+sitting beside the trigger. */
 function PromptControl({
+  title,
   defaultPrompt,
   running,
   runLabel,
   onRun,
 }: {
+  title: string;
   defaultPrompt: string | undefined;
   running: boolean;
   runLabel: string;
   onRun: (promptOverride?: string) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [open, setOpen] = useState(false);
   // null = showing the default prompt as-is (tracks `defaultPrompt` as it arrives from the
   // API); once the reviewer types, this holds their edit instead and no longer follows it.
   const [edited, setEdited] = useState<string | null>(null);
   const prompt = edited ?? defaultPrompt ?? "";
   const isCustom = edited !== null && defaultPrompt !== undefined && edited.trim() !== defaultPrompt.trim();
 
+  const close = () => setOpen(false);
+  const run = () => {
+    onRun(isCustom ? prompt : undefined);
+    close();
+  };
+
   return (
-    <div className="flex flex-col items-end gap-[8px]">
-      <div className="flex items-center gap-[8px]">
-        <button
-          type="button"
-          onClick={() => setExpanded((e) => !e)}
-          disabled={defaultPrompt === undefined}
-          className="btn flex items-center gap-[6px] rounded-[9px] border-[0.5px] border-line-strong bg-surface px-[12px] py-[6px] text-[12px] text-ink-soft disabled:opacity-60"
-        >
-          <Terminal size={13} />
-          {expanded ? "Hide prompt" : "Show prompt"}
-        </button>
-        <button
-          onClick={() => onRun(isCustom ? prompt : undefined)}
-          disabled={running || defaultPrompt === undefined}
-          className="btn flex items-center gap-[6px] rounded-[9px] border-[0.5px] border-line-strong bg-surface px-[12px] py-[6px] text-[12px] text-ink disabled:opacity-60"
-        >
-          {running ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-          {running ? "Working…" : isCustom ? `${runLabel} with custom prompt` : runLabel}
-        </button>
-      </div>
-      {expanded && (
-        <div className="w-full rounded-[9px] border-[0.5px] border-line-strong bg-surface2 p-[10px]">
-          <textarea
-            value={prompt}
-            onChange={(e) => setEdited(e.target.value)}
-            rows={6}
-            className="w-full resize-y rounded-[7px] border-[0.5px] border-line-strong bg-surface px-[10px] py-[8px] font-mono text-[11.5px] leading-[1.5] text-ink outline-none focus:border-accent"
-          />
-          <div className="mt-[6px] flex items-center justify-between gap-2">
-            <span className="text-[11px] text-ink-faint">
-              {isCustom ? "Custom prompt — runs fresh, not cached." : "Default prompt — edit it to run with your own wording."}
-            </span>
-            {isCustom && (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        disabled={running || defaultPrompt === undefined}
+        className="btn flex items-center gap-[6px] rounded-[9px] border-[0.5px] border-line-strong bg-surface px-[12px] py-[6px] text-[12px] text-ink-soft disabled:opacity-60"
+      >
+        {running ? <Loader2 size={13} className="animate-spin" /> : <Terminal size={13} />}
+        {running ? "Working…" : "Show prompt"}
+      </button>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(32,32,28,.4)] px-4" onClick={close}>
+          <div
+            className="expand w-full max-w-[560px] rounded-[13px] border-[0.5px] border-line bg-surface p-5 shadow-[0_20px_60px_-15px_rgba(30,28,24,.4)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-[12px] text-[15px] font-semibold text-ink">{title}</div>
+            <textarea
+              value={prompt}
+              onChange={(e) => setEdited(e.target.value)}
+              rows={10}
+              className="w-full resize-y rounded-[7px] border-[0.5px] border-line-strong bg-surface2 px-[10px] py-[8px] font-mono text-[11.5px] leading-[1.5] text-ink outline-none focus:border-accent"
+            />
+            <div className="mt-[6px] flex items-center justify-between gap-2">
+              <span className="text-[11px] text-ink-faint">
+                {isCustom ? "Custom prompt — runs fresh, not cached." : "Default prompt — edit it to run with your own wording."}
+              </span>
+              {isCustom && (
+                <button
+                  type="button"
+                  onClick={() => setEdited(null)}
+                  className="btn shrink-0 cursor-pointer rounded-md border-none bg-transparent p-0 text-[11px] text-accent"
+                >
+                  Reset to default
+                </button>
+              )}
+            </div>
+
+            <div className="mt-[16px] flex flex-col gap-[6px] border-t-[0.5px] border-line pt-[14px]">
+              <span className="text-[12px] font-medium text-ink-soft">Extract scoring rules from a document</span>
+              <div className="flex cursor-not-allowed items-center gap-[8px] rounded-[9px] border-[1.5px] border-dashed border-line-strong bg-surface2 px-3 py-[10px] text-[12px] text-ink-faint opacity-70">
+                <Upload size={14} className="shrink-0" />
+                <span>Upload a tender/RFP so the model can derive its scoring rules from it — coming soon</span>
+              </div>
+            </div>
+
+            <div className="mt-[18px] flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setEdited(null)}
-                className="btn shrink-0 cursor-pointer rounded-md border-none bg-transparent p-0 text-[11px] text-accent"
+                onClick={close}
+                className="btn cursor-pointer rounded-[9px] border-[0.5px] border-line-strong bg-surface px-4 py-2 text-[13px] text-ink"
               >
-                Reset to default
+                Cancel
               </button>
-            )}
+              <button
+                type="button"
+                onClick={run}
+                className="btn flex cursor-pointer items-center gap-[6px] rounded-[9px] border-none bg-accent px-4 py-2 text-[13px] font-medium text-white"
+              >
+                <Sparkles size={14} />
+                {isCustom ? "Regenerate" : runLabel}
+              </button>
+            </div>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -529,6 +561,7 @@ export function MatrixView({ projectId }: { projectId: string }) {
                     <div className="mb-[10px] flex flex-wrap items-center justify-between gap-[10px]">
                       <div className="text-[13px] font-semibold text-ink">Section score — on what basis this section was scored</div>
                       <PromptControl
+                        title={`${tab === "price" ? "Price" : "Technical"} section scoring prompt`}
                         defaultPrompt={defaultPrompts?.[topic]}
                         running={!!scoring[topic]}
                         runLabel="Run scoring"
@@ -581,6 +614,7 @@ export function MatrixView({ projectId }: { projectId: string }) {
             <>
               <div className="mb-[12px] flex justify-end">
                 <PromptControl
+                  title="Detailed comparison prompt"
                   defaultPrompt={defaultPrompts?.comparison}
                   running={comparing}
                   runLabel="Regenerate"
