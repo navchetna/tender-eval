@@ -20,7 +20,7 @@ from ..llm_agent import structured_agent
 from ..llm_credentials import LlmCredentials
 from .models import BidScore, NormalizedView, SectionScoreResult
 
-_SYSTEM_PROMPT = (
+DEFAULT_SYSTEM_PROMPT = (
     'You are a procurement evaluator. You are given a tender\'s requirement rows for one section '
     '(technical or price/commercial), and every bidder\'s matched responses across all of those '
     'rows. Score EACH bidder\'s section holistically from 0-100, weighing completeness, quality, '
@@ -60,7 +60,9 @@ def flatten_view(view: NormalizedView) -> tuple[str, list[str]]:
     return '\n'.join(lines), bidders
 
 
-async def score_section(creds: LlmCredentials, view: NormalizedView) -> SectionScoreResult:
+async def score_section(
+    creds: LlmCredentials, view: NormalizedView, system_prompt: str | None = None,
+) -> SectionScoreResult:
     body_text, bidders = flatten_view(view)
     if not bidders:
         return SectionScoreResult(
@@ -68,7 +70,7 @@ async def score_section(creds: LlmCredentials, view: NormalizedView) -> SectionS
         )
 
     prompt = f'Section: {view.topic.value}\n\n{body_text}'
-    agent = structured_agent(creds, _ScoreResponse, _SYSTEM_PROMPT, max_tokens=4096, reasoning_effort='low')
+    agent = structured_agent(creds, _ScoreResponse, system_prompt or DEFAULT_SYSTEM_PROMPT, max_tokens=4096, reasoning_effort='low')
     result = await agent.run(prompt)
 
     scores = [s for s in result.output.scores if s.bidder in bidders]

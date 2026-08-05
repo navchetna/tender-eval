@@ -81,3 +81,22 @@ class ComparisonResult(BaseModel):
     assessments: list[BidAssessment]
     recommended_bidder: str | None
     recommendation: str
+
+
+class PromptOverride(BaseModel):
+    """Optional request body for the score/compare endpoints: a blank or omitted prompt runs
+    (and caches) the default; a non-blank prompt replaces the system prompt for that one
+    request and is never cached, since the result is no longer a pure function of the
+    approved section content alone."""
+
+    prompt: str | None = None
+
+
+class DefaultPrompts(BaseModel):
+    """The default system prompts behind the Technical/Price scoring and the cross-bid
+    comparison step, so the compliance-matrix UI can show what will run before a reviewer
+    chooses to override it."""
+
+    technical: str
+    price: str
+    comparison: str
