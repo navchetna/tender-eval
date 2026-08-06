@@ -49,8 +49,11 @@ model-backed stages are centrally hosted and reached purely by URL + credentials
 
 There's no fast/quality model split in this app's own code the way there is on the AIPC
 branch — every call asks the gateway for the single alias `auto_router`, and the gateway
-itself decides which underlying model actually answers each request. What *does* vary per
-call is **whose key** makes it:
+itself decides which underlying model actually answers each request. In the reference
+deployment the model behind that alias is **Qwen/Qwen3-30B-A3B-Instruct-2507** (a
+mixture-of-experts model — 30B parameters with ~3B active per token — served by vLLM on
+Xeon; see [Prerequisite 0](#prerequisite-0--stand-up-the-enterprise-agent-toolkit) for how
+it gets deployed). What *does* vary per call is **whose key** makes it:
 
 - **Each employee has their own LiteLLM key**, assigned by an admin when the employee is
   created (`POST /employees`) and stored encrypted at rest (Fernet, via
@@ -63,21 +66,95 @@ call is **whose key** makes it:
 - **The bootstrap admin** gets `ADMIN_LITELLM_KEY` set on their employee row the first time
   `POST /setup/database` runs, so there's always at least one usable key from first boot.
 
-All of these — `LITELLM_KEY_ENCRYPTION_KEY`, `LITELLM_WORKER_API_KEY`, `ADMIN_LITELLM_KEY`,
-and every reviewer's own key — need to come from whoever administers the enterprise agentic
-toolkit for your organization; this app only consumes them, it doesn't provision them.
+All of these — `LITELLM_WORKER_API_KEY`, `ADMIN_LITELLM_KEY`, and every reviewer's own key —
+are minted on the toolkit's gateway by whoever administers it for your organization; this app
+only consumes them, it doesn't provision them. If nobody runs that toolkit for you yet, see
+[Prerequisite 0](#prerequisite-0--stand-up-the-enterprise-agent-toolkit) below for standing
+it up (including which model to deploy) and minting the keys yourself.
+(`LITELLM_KEY_ENCRYPTION_KEY` is the exception — it's generated locally, see Prerequisites.)
 
 ---
 
 ## Installation
 
-Because there's no model infrastructure to stand up, this is just the app itself:
-Postgres + backend + frontend.
+Because this app doesn't stand up model infrastructure of its own, installing it is just the
+app itself: Postgres + backend + frontend. The model infrastructure it consumes is the
+enterprise agent toolkit — if your organization already runs one, skip Prerequisite 0 and
+just collect its URL + keys; otherwise stand it up first.
+
+### Prerequisite 0 — stand up the enterprise agent toolkit
+
+Tender Evaluation is packaged as an **extension of the
+[Intel® AI for Enterprise Agent Toolkit](https://github.com/intel/enterprise-agent-toolkit)**:
+every LLM call goes to the toolkit's GenAI Gateway (LiteLLM), and every PDF parse goes to a
+PDF pipeline deployed on the same cluster. Neither exists until the toolkit is deployed, so
+that deployment is prerequisite zero.
+
+1. **Check the toolkit's own prerequisites** —
+   [docs/prerequisites.md](https://github.com/intel/enterprise-agent-toolkit/blob/main/docs/prerequisites.md):
+   an Ubuntu 22.04/24.04 x86_64 node (48+ cores / 32 GB+ RAM / 150 GB+ disk for the base
+   stack), a Hugging Face token with read access to gated models, sudo + SSH-key access,
+   and DNS + TLS cert/key for the cluster URL. Note the model-pod memory floor: the 30B
+   model below needs **≥128 GiB** available to its pod.
+
+2. **Configure the deployment** — clone the toolkit and edit
+   `core/inventory/agentic-config.cfg`, keeping `deploy_genai_gateway=on` and
+   `deploy_llm_models=on`, and selecting **the model this app is built against**:
+
+   ```ini
+   cluster_url=<your cluster FQDN>          # becomes this app's LITELLM_BASE_URL / PARSER_BASE_URL host
+   hugging_face_token=hf_xxxxxxxxxxxxxxxx
+   models=cpu-qwen3-30b-a3b                 # catalog entry for Qwen/Qwen3-30B-A3B-Instruct-2507
+   deploy_genai_gateway=on
+   deploy_llm_models=on
+   ```
+
+   `cpu-qwen3-30b-a3b` is the toolkit's pre-validated catalog name for
+   `Qwen/Qwen3-30B-A3B-Instruct-2507`, served by vLLM on Xeon — the model every stage of
+   this app (section detection, row/header alignment, judgment, scoring, comparison,
+   notification drafting) runs against.
+
+3. **Deploy** — `./deploy-agentic-stack.sh`, then verify per the toolkit's
+   [single-node](https://github.com/intel/enterprise-agent-toolkit/blob/main/docs/single-node-deployment.md)
+   (or [multi-node](https://github.com/intel/enterprise-agent-toolkit/blob/main/docs/multi-node-deployment.md))
+   guide — all pods `Running`, and `GET /v1/models` on the gateway listing the Qwen model.
+
+4. **Register the `auto_router` alias** — this app asks the gateway for the model name
+   `auto_router` (`LITELLM_MODEL=auto_router`), so that name has to exist on the gateway.
+   Either set up the toolkit's semantic router (Step 1b of the single-node guide) and give
+   the router that name when registering it, or — with only the one Qwen model deployed —
+   simply set this app's `LITELLM_MODEL=Qwen/Qwen3-30B-A3B-Instruct-2507` instead and skip
+   the alias entirely.
+
+5. **Issue keys from the gateway** — retrieve the LiteLLM master key from the cluster:
+
+   ```bash
+   kubectl get deploy -n genai-gateway genai-gateway-deployment \
+     -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="LITELLM_MASTER_KEY")].value}'
+   ```
+
+   then use it (LiteLLM virtual keys, `POST /key/generate` on the gateway) to mint the keys
+   this app consumes: one for the bootstrap admin (`ADMIN_LITELLM_KEY`), one for the
+   unattended background worker (`LITELLM_WORKER_API_KEY`), and one per reviewer (assigned
+   at `POST /employees` time — see [Add reviewers](#add-reviewers) below).
+
+6. **Deploy the PDF pipeline** — the OCR/parsing stage is *not* part of the toolkit's base
+   stack; it's the async docling parser from
+   [navchetna/AIComps](https://github.com/navchetna/AIComps)
+   (`input-handlers/pdf/parsers/docling/async`), deployed onto the same cluster and exposed
+   under the gateway host at `/pdf-pipeline` — that URL becomes this app's
+   `PARSER_BASE_URL`.
+
+In the reference deployment all of this resolves to `ei-api.mg2.eglb.intel.com`
+(`LITELLM_BASE_URL=https://ei-api.mg2.eglb.intel.com/v1`,
+`PARSER_BASE_URL=https://ei-api.mg2.eglb.intel.com/pdf-pipeline`) — substitute your own
+`cluster_url` everywhere those appear in `backend.env`.
 
 ### Prerequisites
 
-- Access to the enterprise agentic toolkit: an admin LiteLLM key, a worker LiteLLM key, and
-  a Fernet encryption key for storing employee keys at rest (generate your own with
+- Access to the enterprise agent toolkit deployment above: an admin LiteLLM key, a worker
+  LiteLLM key, and a Fernet encryption key for storing employee keys at rest (generate your
+  own with
   `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
   — this one you *do* generate yourself, it's local-only and never leaves this deployment).
 - A Google Cloud project with the Gmail API + Drive API enabled, and a **Desktop application**
