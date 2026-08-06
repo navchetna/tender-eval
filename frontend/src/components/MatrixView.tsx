@@ -3,16 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Download, Loader2, Sparkles, Terminal, Upload } from "lucide-react";
-import {
-  ApiError,
-  compareBids,
-  exportMatrix,
-  getDefaultPrompts,
-  getNormalizedView,
-  getProjects,
-  scoreSection,
-} from "@/lib/api";
-import type { ComparisonResult, DefaultPrompts, NormalizedView, Project, SectionScoreResult, Topic } from "@/lib/types";
+import { ApiError, compareBids, exportMatrix, getDefaultPrompts, getNormalizedView, getProjects } from "@/lib/api";
+import type { ComparisonResult, DefaultPrompts, NormalizedView, Project, Topic } from "@/lib/types";
 import { Card } from "@/components/ui/Card";
 import { Empty } from "@/components/ui/Empty";
 import { toneClasses } from "@/lib/tone";
@@ -270,36 +262,6 @@ function PromptControl({
   );
 }
 
-function SectionScorePanel({ result }: { result: SectionScoreResult }) {
-  if (result.scores.length === 0) {
-    return <Empty>No approved bidder responses to score yet.</Empty>;
-  }
-  return (
-    <div>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-[12px]">
-        {result.scores.map((s) => {
-          const tn = toneClasses[scoreTone(s.score)];
-          return (
-            <Card key={s.bidder} className="p-[15px]">
-              <div className="mb-[8px] flex items-center justify-between gap-2">
-                <span className="truncate text-[14px] font-semibold text-ink">{s.bidder}</span>
-                <span className={`shrink-0 rounded-full px-2 py-[2px] text-[12px] font-semibold ${tn.bg} ${tn.fg}`}>{s.score}/100</span>
-              </div>
-              <p className="m-0 text-[12px] leading-[1.5] text-ink-soft">{s.reasoning}</p>
-            </Card>
-          );
-        })}
-      </div>
-      {result.comparison && (
-        <Card className="mt-[12px] p-[15px]">
-          <div className="mb-[5px] text-[11px] tracking-[0.3px] text-ink-faint uppercase">How these scores compare</div>
-          <div className="font-serif text-[13.5px] leading-[1.6] text-ink-soft">{result.comparison}</div>
-        </Card>
-      )}
-    </div>
-  );
-}
-
 function ComparisonPanel({ result }: { result: ComparisonResult }) {
   if (result.assessments.length === 0) {
     return <Empty>No approved bidder responses to compare yet.</Empty>;
@@ -382,9 +344,6 @@ export function MatrixView({ projectId }: { projectId: string }) {
   const [comparisonError, setComparisonError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [defaultPrompts, setDefaultPrompts] = useState<DefaultPrompts | null>(null);
-  const [scores, setScores] = useState<Partial<Record<Topic, SectionScoreResult>>>({});
-  const [scoring, setScoring] = useState<Partial<Record<Topic, boolean>>>({});
-  const [scoreErrors, setScoreErrors] = useState<Partial<Record<Topic, string>>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -468,21 +427,6 @@ export function MatrixView({ projectId }: { projectId: string }) {
     }
   };
 
-  const onScore = async (topic: Topic, promptOverride?: string) => {
-    if (!project) return;
-    setScoring((prev) => ({ ...prev, [topic]: true }));
-    setScoreErrors((prev) => ({ ...prev, [topic]: undefined }));
-    try {
-      const result = await scoreSection(projectId, project.current_version, topic, promptOverride);
-      setScores((prev) => ({ ...prev, [topic]: result }));
-    } catch (err) {
-      const message = err instanceof ApiError ? err.message : "Scoring failed";
-      setScoreErrors((prev) => ({ ...prev, [topic]: message }));
-    } finally {
-      setScoring((prev) => ({ ...prev, [topic]: false }));
-    }
-  };
-
   if (error) {
     return (
       <div className="px-[30px] py-[22px]">
@@ -557,25 +501,6 @@ export function MatrixView({ projectId }: { projectId: string }) {
               )}
               {view && (
                 <>
-                  <Card className="mb-[14px] p-[15px]">
-                    <div className="mb-[10px] flex flex-wrap items-center justify-between gap-[10px]">
-                      <div className="text-[13px] font-semibold text-ink">Section score — on what basis this section was scored</div>
-                      <PromptControl
-                        title={`${tab === "price" ? "Price" : "Technical"} section scoring prompt`}
-                        defaultPrompt={defaultPrompts?.[topic]}
-                        running={!!scoring[topic]}
-                        runLabel="Run scoring"
-                        onRun={(override) => onScore(topic, override)}
-                      />
-                    </div>
-                    {scoreErrors[topic] && (
-                      <div className="mb-[10px] rounded-[9px] bg-bad-bg px-3 py-2 text-[12.5px] text-bad-fg">{scoreErrors[topic]}</div>
-                    )}
-                    {!scores[topic] && !scoreErrors[topic] && (
-                      <Empty>Not scored yet — run it above with the default prompt, or edit it first.</Empty>
-                    )}
-                    {scores[topic] && <SectionScorePanel result={scores[topic]!} />}
-                  </Card>
                   <div className="mb-[10px] flex items-center justify-between">
                     {tab === "price" && (
                       <div className="flex items-center gap-[6px] text-[12px] text-ink-soft">
