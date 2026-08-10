@@ -1,0 +1,89 @@
+# The FastAPI backend: Gmail ingestion, parsing orchestration (talking to the enterprise
+# PDF pipeline), section detection, evaluation, and the review/normalization API.
+#
+# Expects one secret, created out of band (see README.md):
+#   backend-env — the app's full configuration, same keys as ../docker/backend.env.example
+#                 PLUS a DATABASE_URL pointing at the enterprise agent toolkit's Postgres
+#                 (no Postgres is deployed here, unlike the compose setup's bundled fallback).
+#
+# The image name `tender-bid-backend` is a placeholder — kustomization.yaml rewrites it to
+# your registry (k8s can't build from source the way docker compose does, so the image must
+# be built and pushed first; see README.md).
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+spec:
+  selector:
+    app: backend
+  ports:
+    - name: http
+      port: 8011
+      targetPort: http
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gmail-token
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      # Holds a single small JSON file (the Gmail/Drive OAuth refresh token); 1Gi only
+      # because many provisioners round tiny claims up to their minimum anyway.
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  # Keep this at 1: the pod runs the unattended background pipeline worker (see
+  # PARSE_WORKER_ENABLED in backend.env), and the gmail-token volume below is ReadWriteOnce.
+  replicas: 1
+  strategy:
+    # RollingUpdate would deadlock on the ReadWriteOnce gmail-token volume — the new pod
+    # can't attach it until the old pod releases it.
+    type: Recreate
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: tender-bid-backend
+          envFrom:
+            # Includes DATABASE_URL — the toolkit's Postgres, not one deployed here.
+            - secretRef:
+                name: backend-env
+          ports:
+            - name: http
+              containerPort: 8011
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          volumeMounts:
+            # Gmail/Drive OAuth refresh token — written and refreshed by the app at runtime,
+            # so this must be a writable volume, not a Secret mount (those are read-only).
+            # Matches GMAIL_TOKEN_PATH's default of .secrets/gmail-token.json, resolved
+            # relative to the container's WORKDIR (/app).
+            - name: gmail-token
+              mountPath: /app/.secrets
+      volumes:
+        - name: gmail-token
+          persistentVolumeClaim:
+            claimName: gmail-token

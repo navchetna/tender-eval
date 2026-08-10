@@ -224,6 +224,19 @@ curl -s http://localhost:8011/health
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3002   # frontend — open in a browser to actually use it
 ```
 
+### Alternative: deploy on Kubernetes
+
+The backend and frontend can be deployed onto a Kubernetes cluster instead of docker compose —
+manifests and a full walkthrough (image build/push, secrets, ingress, the same one-time
+`/setup/database` bootstrap) live in [`install/k8s/`](install/k8s/README.md). Unlike the
+compose setup, no fallback Postgres is bundled: the k8s deployment points `DATABASE_URL` at
+the enterprise agent toolkit's Postgres, as in the reference deployment. The prerequisites
+above apply unchanged; only the deployment mechanics differ.
+
+```bash
+kubectl apply -k install/k8s   # after the build/push + secrets steps in install/k8s/README.md
+```
+
 ### Add reviewers
 
 Every other employee needs their own LiteLLM key assigned at creation time:

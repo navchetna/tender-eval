@@ -1,0 +1,43 @@
+# Routes the two public hostnames to their services — the k8s replacement for the external
+# reverse proxy the docker-compose setup assumes. Substitute your own hostnames everywhere
+# below, and remember the same two values are baked into the app itself: the API host must
+# appear in the backend-env secret's CORS_ORIGINS, and it's the frontend image's
+# NEXT_PUBLIC_API_BASE_URL build arg (a rebuild, not a config change — see frontend.yaml).
+#
+# TLS: as with the compose setup, neither service serves HTTPS itself — terminate TLS at the
+# ingress controller. Uncomment the tls block and create the referenced secret (or use
+# cert-manager) if your controller doesn't already have a default certificate.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tender-bid
+  # annotations:
+  #   cert-manager.io/cluster-issuer: letsencrypt
+spec:
+  ingressClassName: nginx
+  # tls:
+  #   - hosts:
+  #       - tender-bid.mg2.eglb.intel.com
+  #       - tender-bid-api.mg2.eglb.intel.com
+  #     secretName: tender-bid-tls
+  rules:
+    - host: tender-bid.mg2.eglb.intel.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  name: http
+    - host: tender-bid-api.mg2.eglb.intel.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  name: http

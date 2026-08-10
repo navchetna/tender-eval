@@ -1,0 +1,51 @@
+# The reviewer-facing Next.js UI.
+#
+# The image name `tender-bid-frontend` is a placeholder — kustomization.yaml rewrites it to
+# your registry. Remember that NEXT_PUBLIC_API_BASE_URL is baked into the JS bundle at image
+# BUILD time (see frontend/Dockerfile) — pointing the UI at a different backend URL means
+# rebuilding and re-pushing the image, not editing anything in this file.
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+spec:
+  selector:
+    app: frontend
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  # The frontend is stateless — safe to scale up, unlike the backend.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: tender-bid-frontend
+          ports:
+            - name: http
+              containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20

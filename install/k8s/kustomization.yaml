@@ -1,0 +1,22 @@
+# Deploy with `kubectl apply -k install/k8s` — but read README.md first: the two images must
+# be built and pushed, and the two secrets created, before anything here will start.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: tender-bid
+
+resources:
+  - namespace.yaml
+  - backend.yaml
+  - frontend.yaml
+  - ingress.yaml
+
+# Point these at wherever you pushed the images built in README.md step 1. The bare names
+# on the left are the placeholders used in backend.yaml / frontend.yaml.
+images:
+  - name: tender-bid-backend
+    newName: registry.example.com/tender-bid-backend
+    newTag: latest
+  - name: tender-bid-frontend
+    newName: registry.example.com/tender-bid-frontend
+    newTag: latest
