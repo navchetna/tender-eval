@@ -37,6 +37,27 @@ marked non-compliant on row 12?").
    comparison across bidders is produced — all traceable back to the exact section/row it
    came from, so a reviewer can see *why*, not just *what*.
 
+## Architecture Flow
+
+A component view of the deployment, in three layers: the **Tender-Eval solution** (frontend +
+backend, with Pydantic Logfire observability), the **Pydantic tasks** it invokes — each one a
+pydantic-ai agent (except rule-based classification) — and the **Intel® AI for Enterprise
+Agent Toolkit** that serves the models behind them. PDF parsing is a standalone task (the
+async docling parser) that turns each PDF into **Markdown, a TOC, and an output tree**,
+calling the gateway-served **LightOnOCR-2-1B** for OCR; section identification, alignment,
+and judging/scoring all hit the gateway's **Qwen3-30B-A3B** (and Postgres holds the pipeline
+state). Diagram source: [editable Excalidraw file](docs/architecture-flow.excalidraw).
+
+![Architecture Flow](docs/architecture-flow.png)
+
+The toolkit-hosted Postgres carries each file's pipeline state
+(`RECEIVED → PARSED → SUGGESTED → APPROVED`) and caches every computed normalization result,
+so nothing model-backed is recomputed unless its approved inputs change. (The bundled
+docker-compose Postgres is a fallback for standalone installs — the reference deployment
+points `DATABASE_URL` at the toolkit's Postgres instead.) Every gateway call is authenticated
+with the key of whoever caused it (reviewer, admin, or the background worker) — see the key
+attribution notes below.
+
 ## Models — where they run, and how this app reaches them
 
 Unlike the AIPC branch, this deployment doesn't stand up any model server itself. Both
