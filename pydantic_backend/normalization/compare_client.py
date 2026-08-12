@@ -15,7 +15,7 @@ from ..llm_credentials import LlmCredentials
 from .models import BidAssessment, ComparisonResult, NormalizedView
 from .score_client import flatten_view
 
-_SYSTEM_PROMPT = (
+DEFAULT_SYSTEM_PROMPT = (
     'You are a senior procurement evaluator making a final award recommendation. You are given '
     'a tender\'s technical requirements and/or price/commercial line items, each with every '
     'bidder\'s matched responses. For EACH bidder, give: a "score" (integer 0-100, weighing '
@@ -40,6 +40,7 @@ class _ComparisonResponse(BaseModel):
 async def compare_bids(
     creds: LlmCredentials, project_id: str, version: int,
     technical_view: NormalizedView | None, price_view: NormalizedView | None,
+    system_prompt: str | None = None,
 ) -> ComparisonResult:
     sections: list[str] = []
     bidders: list[str] = []
@@ -59,7 +60,7 @@ async def compare_bids(
         )
 
     prompt = '\n\n'.join(sections)
-    agent = structured_agent(creds, _ComparisonResponse, _SYSTEM_PROMPT, max_tokens=4096, reasoning_effort='low')
+    agent = structured_agent(creds, _ComparisonResponse, system_prompt or DEFAULT_SYSTEM_PROMPT, max_tokens=4096, reasoning_effort='low')
     result = await agent.run(prompt)
 
     assessments = [

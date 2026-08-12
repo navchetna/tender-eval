@@ -2,6 +2,7 @@ import { loadAuth } from "./auth-storage";
 import type {
   ComparisonResult,
   CurrentUser,
+  DefaultPrompts,
   Employee,
   EmployeeIn,
   EmployeeUpdate,
@@ -178,11 +179,19 @@ export const notifyEvaluation = (docType: "tender" | "bid", evaluationId: string
 export const getNormalizedView = (projectId: string, version: number, topic: Topic) =>
   request<NormalizedView>(`/normalization/${projectId}/${version}/${topic}`);
 
-export const scoreSection = (projectId: string, version: number, topic: Topic) =>
-  request<SectionScoreResult>(`/normalization/${projectId}/${version}/score/${topic}`, { method: "POST" });
+export const getDefaultPrompts = () => request<DefaultPrompts>("/normalization/prompts");
 
-export const compareBids = (projectId: string, version: number) =>
-  request<ComparisonResult>(`/normalization/${projectId}/${version}/compare`, { method: "POST" });
+export const scoreSection = (projectId: string, version: number, topic: Topic, prompt?: string) =>
+  request<SectionScoreResult>(`/normalization/${projectId}/${version}/score/${topic}`, {
+    method: "POST",
+    body: JSON.stringify({ prompt: prompt || null }),
+  });
+
+export const compareBids = (projectId: string, version: number, prompt?: string) =>
+  request<ComparisonResult>(`/normalization/${projectId}/${version}/compare`, {
+    method: "POST",
+    body: JSON.stringify({ prompt: prompt || null }),
+  });
 
 export async function exportMatrix(projectId: string, version: number): Promise<void> {
   const token = loadAuth()?.token;

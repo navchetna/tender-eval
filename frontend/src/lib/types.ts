@@ -164,6 +164,12 @@ export interface ComparisonResult {
   recommendation: string;
 }
 
+export interface DefaultPrompts {
+  technical: string;
+  price: string;
+  comparison: string;
+}
+
 // Shape of the parser's output_tree.json (see evaluation/tree_utils.py's docstring for the
 // confirmed real schema) — a heading's children are single-key dicts keyed by heading text.
 export type TreeContentType = "text" | "table" | "image";
