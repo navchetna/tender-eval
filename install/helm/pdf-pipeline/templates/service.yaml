@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: pdf-pipeline
+  namespace: {{ include "pdf-pipeline.namespace" . }}
+  labels:
+    app: pdf-pipeline
+spec:
+  selector:
+    app: pdf-pipeline
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.targetPort }}
+      protocol: TCP
+  type: ClusterIP
+{{- if .Values.nodePort.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pdf-pipeline-nodeport
+  namespace: {{ include "pdf-pipeline.namespace" . }}
+  labels:
+    app: pdf-pipeline
+spec:
+  selector:
+    app: pdf-pipeline
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.targetPort }}
+      nodePort: {{ .Values.nodePort.port }}
+      protocol: TCP
+  type: NodePort
+{{- end }}

@@ -1,0 +1,67 @@
+# Where every namespaced resource in this chart lands. The chart does NOT create
+# this namespace itself (templating a Namespace resource causes Helm ownership
+# conflicts if anything else ever touches it) — pass --namespace pdf-pipeline
+# --create-namespace on install instead (see README.md), keeping this in sync.
+namespaceOverride: pdf-pipeline
+
+# Locally built from a patched checkout of AIComps' source (see
+# input-handlers/pdf/parsers/docling/async/server/worker.py's _build_converter comment) —
+# the published ervin0307/pdf-pipeline:latest image has concurrency=64/timeout=180 baked
+# in, which fails every request against a single CPU-only vLLM instance (see
+# ../lighton-ocr/) once more than a couple of pages compete for the same core budget.
+# Rebuild with:
+#   cd <AIComps-checkout>/input-handlers/pdf/parsers/docling/async
+#   sudo nerdctl --namespace k8s.io build -t pdf-pipeline:local .
+# then `kubectl -n pdf-pipeline rollout restart deploy/pdf-pipeline` (IfNotPresent won't
+# pick up new content under the same tag on its own).
+image:
+  repository: pdf-pipeline
+  tag: local
+  pullPolicy: IfNotPresent
+
+replicaCount: 1  # keep at 1 — single-process uvicorn + in-process
+                 # ThreadPoolExecutor + local SQLite task store (see Chart README)
+
+service:
+  port: 8010       # matches the docling async service's own docker-compose convention
+  targetPort: 8000
+
+# Set to false once you front this with the ingress below (or your own) — the
+# NodePort is handy for a first bring-up without DNS/TLS in place yet.
+nodePort:
+  enabled: true
+  port: 30010
+
+# VLM_URL: the in-cluster LightOnOCR vLLM endpoint. Default matches the
+# release name/namespace used by ../lighton-ocr/vllm-model-values.yaml
+# (vllm-lighton-ocr-cpu, default namespace) — same api_base the toolkit's own
+# deploy-inference-models.yml playbook would produce for models=cpu-lighton-ocr,
+# so this is correct whichever path you deployed the model through.
+vlmUrl: "http://vllm-lighton-ocr-cpu-service.default.svc.cluster.local/v1/chat/completions"
+
+persistence:
+  outputs:
+    size: 10Gi
+    storageClassName: ""   # cluster default if empty
+  db:
+    size: 1Gi
+    storageClassName: ""
+
+resources:
+  requests:
+    cpu: "500m"
+    memory: "1Gi"
+  limits:
+    cpu: "4"
+    memory: "8Gi"
+
+# Exposes the pipeline under the SAME gateway host tender-eval's own README
+# already documents (PARSER_BASE_URL=https://<cluster_url>/pdf-pipeline) —
+# set ingress.host to that cluster_url. Disable if you're only reaching this
+# via the NodePort above, or via your own ingress/APISIX route.
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  host: ""              # e.g. ei-api.mg2.eglb.intel.com — same host as LITELLM_BASE_URL
+  path: /pdf-pipeline
+  tlsSecretName: ""      # leave empty to disable TLS on this Ingress resource

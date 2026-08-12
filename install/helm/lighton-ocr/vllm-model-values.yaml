@@ -1,0 +1,211 @@
+# Values file for the TOOLKIT'S OWN chart (enterprise-agent-toolkit/core/helm-charts/vllm),
+# not a chart of its own. Install with:
+#
+#   helm upgrade --install vllm-lighton-ocr-cpu <path-to-toolkit>/core/helm-charts/vllm \
+#     --values vllm-model-values.yaml \
+#     --set global.HUGGINGFACEHUB_API_TOKEN=<hf_token>
+#
+# This is deliberately just the LightOnOCR-2-1B slice of the toolkit's own
+# xeon-values.yaml (core/helm-charts/vllm/xeon-values.yaml) — same CPU defaults,
+# same model-specific vLLM args — so this deployment behaves identically to
+# installing it through the toolkit's own agentic-config.cfg + `models=` catalog
+# flow, without requiring write access to (or a redeploy of) the toolkit's
+# shared central config. Keep this in sync if the toolkit's own LightOnOCR entry
+# changes upstream.
+
+accelDevice: ""
+cpu_balloon_annotation: ""
+
+resources:
+  requests:
+    cpu: "{{ .Values.cpu }}"
+    memory: "{{ .Values.memory }}"
+
+block_size: 128
+d_type: "bfloat16"
+# Was 8192 (the toolkit's own xeon-values.yaml default for this model) — bumped after every
+# real PDF page conversion failed with "PipelineError: VLM produced empty/too-small markdown
+# (0 chars)" (pdf-pipeline logs) / vLLM's own "prompt contains 93 characters (more than 0
+# characters, which is the upper bound for 0 input tokens)". Root cause: the docling client
+# (AIComps' server/worker.py, upstream, not ours to change) always requests max_tokens=8192
+# output tokens per call; with max_model_len also 8192, input + output must both fit in that
+# same budget, leaving exactly 0 tokens for the image's own vision tokens (easily 1000s for a
+# full PDF page) — every single request was structurally guaranteed to fail, not just this
+# one file. 32768 leaves generous headroom; bump further if you still see this error on
+# larger/denser pages. Must stay in sync with --max-model-len in extraCmdArgs below.
+max_model_len: 32768
+
+image:
+  repository: vllm/vllm-openai-cpu
+  tag: "v0.23.0"
+  pullPolicy: IfNotPresent
+
+# Same node affinity the toolkit uses for every Xeon inference deployment —
+# adjust or drop if this cluster doesn't label nodes ei-inference-eligible=true.
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: ei-inference-eligible
+              operator: In
+              values: ["true"]
+
+VLLM_CPU_SGL_KERNEL: "1"
+VLLM_NO_USAGE_STATS: 1
+DO_NOT_TRACK: 1
+
+LLM_MODEL_ID: "lightonai/LightOnOCR-2-1B"
+
+modelConfigs:
+  "lightonai/LightOnOCR-2-1B":
+    configMapValues:
+      # Single rank now (tensor_parallel_size=1 below — see the note on that),
+      # so this is the whole pod's KV cache budget, not split/doubled across
+      # ranks. Back to the toolkit's own original single-rank default of "40"
+      # (was briefly "20" while running tensor_parallel_size=2, which applied
+      # this per rank and doubled the real memory footprint — see git history
+      # / prior comment here if you're wondering why it moved around).
+      VLLM_CPU_KVCACHE_SPACE: "40"
+      VLLM_RPC_TIMEOUT: "100000"
+      VLLM_ALLOW_LONG_MAX_MODEL_LEN: "1"
+      VLLM_ENGINE_ITERATION_TIMEOUT_S: "120"
+      VLLM_CPU_NUM_OF_RESERVED_CPU: "1"
+      VLLM_CPU_SGL_KERNEL: "0"
+      HF_HUB_DISABLE_XET: "1"
+      TRITON_CACHE_DIR: "/tmp/.triton"
+      USER: "vllm"
+      # SINGLE rank (tensor_parallel_size=1 below), all 48 physical cores from
+      # BOTH NUMA node 0 and node 1 (HT siblings still deliberately excluded).
+      # We tried tensor_parallel_size=2 first (one rank per NUMA node) to keep
+      # each rank's compute NUMA-local, but that made things much WORSE: TP=2
+      # forces a gloo all-reduce sync between the two rank processes on every
+      # transformer layer, every decode step, and for a model this small
+      # (LightOnOCR-2-1B) that per-token IPC overhead dominated actual compute
+      # — observed as prefill staying reasonable (~50 tok/s, batched, sync cost
+      # amortized) while generation/decode collapsed to ~1-2 tok/s (one sync
+      # round-trip per token, unamortized). A single process has no such
+      # cross-rank sync at all, so it wins even though its OMP threads now
+      # span two NUMA domains — the remaining cost is only "some memory
+      # accesses are one hop away," which is far cheaper than a gloo sync per
+      # layer for a model this size.
+      #
+      # vLLM's OMP thread binding needs ONE core range PER RANK, separated by
+      # "|" (pipe) if there's more than one — with a single rank (local_world_
+      # size=1) it's just one contiguous range, no "|" needed:
+      #   AssertionError: Given number of CPU id list [...] doesn't match
+      #   local world size N   — this is what a mismatched segment count
+      #   raises; keep the segment count equal to tensor_parallel_size always.
+      #
+      # Verified against the actual cluster node (master1, Xeon 6960P, 2 sockets
+      # x 72 cores x 2 threads = 288 logical CPUs, 6 NUMA nodes via sub-NUMA
+      # clustering — SNC6, so 24 physical cores / 48 logical CPUs per node):
+      #   lscpu → "NUMA node0 CPU(s): 0-23,144-167"
+      #           "NUMA node1 CPU(s): 24-47,168-191"
+      #   (0-23 / 24-47 = node 0's / node 1's physical cores — contiguous, so
+      #   one range "0-47" covers both nodes' physical cores in one segment;
+      #   144-167 / 168-191 = their hyperthread siblings, still excluded.)
+      # If you deploy this to a different node, re-derive from that node's own
+      # `lscpu` / `/sys/devices/system/node/node*/cpulist` output — don't
+      # reuse these IDs as-is.
+      VLLM_CPU_OMP_THREADS_BIND: "0-47"   # single rank, node0+node1 physical cores, no HT
+    extraCmdArgs:
+      [
+        "--block-size",
+        "128",
+        "--dtype",
+        "bfloat16",
+        "--max-model-len",
+        "32768",
+        "--distributed_executor_backend",
+        "mp",
+        "--enable_chunked_prefill",
+        "--enforce-eager",
+        "--max-num-batched-tokens",
+        "32768",
+        "--max-num-seqs",
+        "64",
+        "--limit-mm-per-prompt",
+        '{"image":1}',
+        "--mm-processor-cache-gb",
+        "0",
+        "--trust_remote_code",
+        "--no-enable-prefix-caching",
+      ]
+    tensor_parallel_size: "{{ .Values.tensor_parallel_size }}"
+    pipeline_parallel_size: "{{ .Values.pipeline_parallel_size }}"
+
+# Sizing — override with --set cpu=... --set memory=... at install time to
+# match the node this lands on (the toolkit's own playbook does the same via
+# --set cpu/memory from its CPU-balloon auto-sizing; here it's just explicit).
+#
+# For physical-core pinning: Kubernetes' `cpu:` unit is a logical CPU
+# (hyperthread), so this must equal VLLM_CPU_OMP_THREADS_BIND's total core
+# count above — 48 (node 0's 24 + node 1's 24 physical cores, one contiguous
+# "0-47" segment for this single rank) on master1, not 24 or 64.
+# `tensor_parallel_size: "1"` — single rank; see the note on
+# VLLM_CPU_OMP_THREADS_BIND above for why (TP=2 tanked decode throughput via
+# per-token gloo sync overhead on a model this small). Re-derive core ranges,
+# `cpu:`, and `tensor_parallel_size` together from `lscpu`/
+# `/sys/devices/system/node/node*/cpulist` on whatever node you actually
+# deploy to. `resources.limits` equals `requests` here (see deployment.yaml),
+# which gives the pod Guaranteed QoS — a prerequisite for the kubelet to pin
+# it to specific cores at all, but NOT sufficient by itself: getting a *hard*
+# guarantee that these 48 logical CPUs are exactly node 0 + node 1's physical
+# cores (not some other 48) additionally requires either the kubelet's CPU
+# Manager (static policy) + Topology Manager, or the toolkit's own NRI
+# CPU-balloon policy (core/roles/nri_cpu_balloons) — its shipped config uses
+# one generic "vllm" balloon with allocatorTopologyBalancing: true, which
+# doesn't pin to specific nodes either, so don't assume it alone does this for
+# you. VLLM_CPU_OMP_THREADS_BIND above still constrains this process's own
+# compute threads to that core range regardless of what the cgroup contains.
+#
+# memory: was 64Gi, sized back when max_model_len was 8192 — bumping max_model_len to
+# 32768 (see that comment above) grew the vision-encoder cache and per-request activation
+# buffers enough that a REAL PDF page request (not the small synthetic warmup requests,
+# which fit fine) got OOMKilled: exitCode 137, reason OOMKilled, right as the first real
+# conversion ran. VLLM_CPU_KVCACHE_SPACE itself (40GiB) is a fixed allocation that doesn't
+# scale with max_model_len, but encoder/activation memory does. 96Gi leaves real headroom
+# above the observed failure point; if you still see OOMKilled with real documents, bump
+# further — check `kubectl get pod ... -o jsonpath='{.status.containerStatuses[0].lastState}'`
+# for `reason: OOMKilled` to confirm that's still the cause before assuming otherwise.
+cpu: "48"
+memory: "96Gi"
+tensor_parallel_size: "1"
+pipeline_parallel_size: "1"
+
+# Required by the chart's deployment.yaml template even though our
+# modelConfigs entry above always matches (it falls back to this map's
+# .extraCmdArgs when a model isn't found in modelConfigs, and evaluates that
+# lookup unconditionally) — copied verbatim from the toolkit's own
+# xeon-values.yaml so this values file renders standalone.
+defaultModelConfigs:
+  configMapValues:
+    VLLM_CPU_KVCACHE_SPACE: "40"
+    VLLM_RPC_TIMEOUT: "100000"
+    VLLM_ALLOW_LONG_MAX_MODEL_LEN: "1"
+    VLLM_ENGINE_ITERATION_TIMEOUT_S: "120"
+    VLLM_CPU_NUM_OF_RESERVED_CPU: "0"
+    VLLM_CPU_SGL_KERNEL: "1"
+    HF_HUB_DISABLE_XET: "1"
+    TORCH_INDUCTOR_CACHE_DIR: "/tmp/torchinductor_cache"
+    TRITON_CACHE_DIR: "/tmp/.triton"
+    USER: "vllm"
+  extraCmdArgs:
+    [
+      "--block-size",
+      "128",
+      "--dtype",
+      "bfloat16",
+      "--distributed_executor_backend",
+      "mp",
+      "--enable_chunked_prefill",
+      "--enforce-eager",
+      "--max-num-batched-tokens",
+      "2048",
+      "--max-num-seqs",
+      "128",
+      "--enable-prefix-caching",
+    ]
+  tensor_parallel_size: "{{ .Values.tensor_parallel_size }}"
+  pipeline_parallel_size: "{{ .Values.pipeline_parallel_size }}"

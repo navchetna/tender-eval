@@ -1,0 +1,12 @@
+apiVersion: v2
+name: pdf-pipeline
+description: >
+  Helm packaging of the async Docling PDF-parsing pipeline
+  (navchetna/AIComps: input-handlers/pdf/parsers/docling/async) — the
+  standalone task Tender Evaluation's backend calls via PARSER_BASE_URL.
+  Converts that project's manifests/ Kustomize set into a proper chart so it
+  ships and versions with this solution instead of living only as a
+  hand-run Kustomize directory in a separate repo.
+type: application
+version: 0.1.0
+appVersion: "1.0"

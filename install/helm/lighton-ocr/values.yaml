@@ -1,0 +1,41 @@
+# Values for the *registration* chart (templates/register-job.yaml).
+# The model server itself is deployed separately with the toolkit's own vllm
+# chart + vllm-model-values.yaml in this same directory — see README.md.
+
+genaiGateway:
+  # Matches enterprise-agent-toolkit's core/helm-charts/genai-gateway release:
+  # service "genai-gateway-service" in namespace "genai-gateway", port 4000.
+  namespace: genai-gateway
+  serviceHost: genai-gateway-service.genai-gateway.svc.cluster.local
+  port: 4000
+
+# The toolkit exposes LITELLM_MASTER_KEY as a plain env var on the
+# genai-gateway-deployment pod (no Secret object of its own — see the root
+# README's "Issue keys from the gateway" step for the kubectl jsonpath that
+# reads it). Create a Secret from that value once, in *this* chart's release
+# namespace, before installing:
+#
+#   kubectl create secret generic lighton-ocr-registration-litellm \
+#     --from-literal=master-key="$(kubectl get deploy -n genai-gateway genai-gateway-deployment \
+#       -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="LITELLM_MASTER_KEY")].value}')"
+masterKeySecret:
+  name: lighton-ocr-registration-litellm
+  key: master-key
+
+# Must match the release name + namespace used to install the model with the
+# toolkit's vllm chart (see vllm-model-values.yaml + README.md) — this is the
+# same api_base the toolkit's own deploy-inference-models.yml playbook uses
+# for cpu-lighton-ocr, so registration behaves identically either way.
+model:
+  name: "lightonai/LightOnOCR-2-1B"
+  litellmModel: "openai/lightonai/LightOnOCR-2-1B"
+  customLlmProvider: "openai"
+  apiBase: "http://vllm-lighton-ocr-cpu-service.default/v1"
+  mode: chat
+  inputCostPerToken: 0.001
+  outputCostPerToken: 0.002
+
+job:
+  image: curlimages/curl:latest
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 3

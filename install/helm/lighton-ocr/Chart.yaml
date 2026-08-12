@@ -1,0 +1,18 @@
+apiVersion: v2
+name: lighton-ocr
+description: >
+  Registers the Intel AI for Enterprise Agent Toolkit's LightOnOCR-2-1B vLLM
+  deployment on the toolkit's own LiteLLM gateway (GenAI Gateway), so Tender
+  Evaluation's PDF pipeline reaches OCR through the same gateway/model-registry
+  every other model on the toolkit uses.
+
+  This chart does NOT deploy the model itself — the model server is deployed
+  with the toolkit's own `core/helm-charts/vllm` chart (already proven for CPU
+  vLLM deployments: security context, HF token secret, PVC, CPU-balloon
+  annotations, chat-template mounts) using the values file shipped alongside
+  this chart (vllm-model-values.yaml). This chart only adds what the toolkit
+  doesn't already automate for us: registering that model on the gateway as a
+  Helm-managed release instead of a one-off ansible/curl step.
+type: application
+version: 0.1.0
+appVersion: "1.0"

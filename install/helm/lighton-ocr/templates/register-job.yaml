@@ -1,0 +1,85 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-register
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    # Re-run on every install/upgrade so a re-deployed model (or a changed
+    # api_base/cost) gets re-registered — the script below is idempotent
+    # either way (skips if the model_name already exists on the gateway).
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  ttlSecondsAfterFinished: {{ .Values.job.ttlSecondsAfterFinished }}
+  backoffLimit: {{ .Values.job.backoffLimit }}
+  template:
+    metadata:
+      name: {{ .Release.Name }}-register
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: register-model
+          image: {{ .Values.job.image }}
+          env:
+            - name: LITELLM_MASTER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.masterKeySecret.name }}
+                  key: {{ .Values.masterKeySecret.key }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+
+              GATEWAY="http://{{ .Values.genaiGateway.serviceHost }}:{{ .Values.genaiGateway.port }}"
+              MODEL_NAME="{{ .Values.model.name }}"
+
+              # Check if model already exists — makes re-installs a no-op.
+              RESPONSE=$(curl -s -w "\n%{http_code}" \
+                -H "accept: application/json" \
+                -H "Authorization: Bearer ${LITELLM_MASTER_KEY}" \
+                "${GATEWAY}/models?return_wildcard_routes=false")
+
+              HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+              BODY=$(echo "$RESPONSE" | sed '$d')
+
+              if [ "$HTTP_CODE" = "200" ]; then
+                MODEL_EXISTS=$(echo "$BODY" | grep -o "\"id\":\"${MODEL_NAME}\"" || echo "")
+                if [ -n "$MODEL_EXISTS" ]; then
+                  echo "Model ${MODEL_NAME} already exists on the gateway, skipping registration"
+                  exit 0
+                fi
+              fi
+
+              REGISTER_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+                -H "accept: */*" \
+                -H "cache-control: no-cache" \
+                -H "content-type: application/json" \
+                -H "Authorization: Bearer ${LITELLM_MASTER_KEY}" \
+                -d '{
+                  "model_name": "{{ .Values.model.name }}",
+                  "litellm_params": {
+                    "model": "{{ .Values.model.litellmModel }}",
+                    "custom_llm_provider": "{{ .Values.model.customLlmProvider }}",
+                    "api_key": "none",
+                    "api_base": "{{ .Values.model.apiBase }}",
+                    "input_cost_per_token": {{ .Values.model.inputCostPerToken }},
+                    "output_cost_per_token": {{ .Values.model.outputCostPerToken }}
+                  },
+                  "model_info": {
+                    "mode": "{{ .Values.model.mode }}"
+                  }
+                }' \
+                "${GATEWAY}/model/new")
+
+              REGISTER_HTTP_CODE=$(echo "$REGISTER_RESPONSE" | tail -n1)
+              REGISTER_BODY=$(echo "$REGISTER_RESPONSE" | sed '$d')
+
+              if [ "$REGISTER_HTTP_CODE" != "200" ]; then
+                echo "ERROR: model registration failed with HTTP code $REGISTER_HTTP_CODE"
+                echo "$REGISTER_BODY"
+                exit 1
+              fi
+
+              echo "Model ${MODEL_NAME} registered successfully at ${GATEWAY}"

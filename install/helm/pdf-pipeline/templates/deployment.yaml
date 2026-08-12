@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pdf-pipeline
+  namespace: {{ include "pdf-pipeline.namespace" . }}
+  labels:
+    app: pdf-pipeline
+spec:
+  # Keep replicas at 1 — single-process uvicorn server with an in-process
+  # ThreadPoolExecutor and a local SQLite task store. Scaling horizontally
+  # would need an external task DB (Postgres/Redis) and a shared ReadWriteMany
+  # volume; that's a separate change, not a values knob.
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: pdf-pipeline
+  template:
+    metadata:
+      labels:
+        app: pdf-pipeline
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: pdf-pipeline
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: pdf-pipeline-config
+          volumeMounts:
+            - name: outputs
+              mountPath: /app/outputs
+            - name: db
+              mountPath: /data
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /docs
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /docs
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        # Both persistent — the upstream manifests/ hostPath'd outputs/ to a
+        # literal dev-machine path, which only works on that one node. A real
+        # cluster needs both mounts on real PVCs (already true for /data
+        # there; making /app/outputs match it here).
+        - name: outputs
+          persistentVolumeClaim:
+            claimName: pdf-pipeline-outputs
+        - name: db
+          persistentVolumeClaim:
+            claimName: pdf-pipeline-db
