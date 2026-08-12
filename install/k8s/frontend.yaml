@@ -34,18 +34,24 @@ spec:
       containers:
         - name: frontend
           image: tender-bid-frontend
+          # IfNotPresent: use a locally built image (e.g. via nerdctl into the
+          # k8s.io containerd namespace, no registry) without kubelet trying
+          # to pull it. Change to Always once you push to a real registry.
+          imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 3000
+          # Path includes basePath ("/tender-eval", set in frontend/next.config.ts) —
+          # bare "/" 404s once basePath is set, since nothing is served there anymore.
           readinessProbe:
             httpGet:
-              path: /
+              path: /tender-eval
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /
+              path: /tender-eval
               port: http
             initialDelaySeconds: 30
             periodSeconds: 20

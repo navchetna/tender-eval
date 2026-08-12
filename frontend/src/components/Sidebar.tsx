@@ -7,6 +7,13 @@ import type { LucideIcon } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { usePendingReviewCount } from "@/lib/pendingReviewCountContext";
 
+// Next.js does NOT auto-prefix plain <img> src paths with basePath the way it does
+// next/link hrefs — see next.config.ts's basePath comment and the vendored
+// node_modules/next/dist/docs/.../basePath.md ("Images" section). Same
+// NEXT_PUBLIC_BASE_PATH build arg next.config.ts reads, so this can't drift out of sync
+// with the actual basePath in effect.
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "";
+
 function NavItem({
   icon: Icon,
   label,
@@ -53,7 +60,7 @@ export function Sidebar() {
     <aside className="flex w-[218px] shrink-0 flex-col border-r-[0.5px] border-line bg-surface px-3 pt-[28px] pb-[18px]">
       <Link href="/projects" className="flex flex-col items-center gap-[10px] px-2 pb-[18px]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/intel-logo.svg" alt="Intel" className="h-[44px] w-auto" />
+        <img src={`${BASE_PATH}/intel-logo.svg`} alt="Intel" className="h-[44px] w-auto" />
         <div className="text-center text-[15px] leading-[1.15] font-semibold">Tender Bid Evaluator</div>
       </Link>
       <div className="mt-[10px] flex flex-col gap-[2px]">

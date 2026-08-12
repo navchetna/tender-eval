@@ -15,6 +15,9 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY frontend .
 ARG NEXT_PUBLIC_API_BASE_URL
 ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
+# Same build-time-inlining caveat as above — see next.config.ts's basePath and Sidebar.tsx.
+ARG NEXT_PUBLIC_BASE_PATH
+ENV NEXT_PUBLIC_BASE_PATH=$NEXT_PUBLIC_BASE_PATH
 RUN npm run build
 
 # next.config.ts sets output: "standalone", so .next/standalone already contains a minimal

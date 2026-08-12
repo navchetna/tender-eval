@@ -1,41 +1,77 @@
-# Routes the two public hostnames to their services — the k8s replacement for the external
-# reverse proxy the docker-compose setup assumes. Substitute your own hostnames everywhere
-# below, and remember the same two values are baked into the app itself: the API host must
-# appear in the backend-env secret's CORS_ORIGINS, and it's the frontend image's
-# NEXT_PUBLIC_API_BASE_URL build arg (a rebuild, not a config change — see frontend.yaml).
+# Routes tender-eval onto the SAME shared host the enterprise agent toolkit's own gateway
+# uses (ei-api.mg2.eglb.intel.com) via sub-paths, instead of needing separate DNS entries —
+# same approach as install/helm/pdf-pipeline's /pdf-pipeline route. If you have your own
+# hostnames instead, substitute them below and drop back to path "/" on each (see git history
+# for the prior two-hostname version of this file).
+#
+# Two Ingress resources, not one, because the frontend and backend need OPPOSITE path
+# handling and a single `nginx.ingress.kubernetes.io/rewrite-target` annotation applies to
+# every path on the resource:
+#   - Frontend: Next.js's basePath="/tender-eval" (frontend/next.config.ts) expects the
+#     prefix to arrive INTACT — no rewrite.
+#   - Backend: FastAPI has no base-path concept, so /tender-eval-api must be STRIPPED before
+#     forwarding — same regex-capture + rewrite-target trick pdf-pipeline's chart uses.
+# The same host/path values are baked into the app itself: the API path must appear in the
+# backend-env secret's CORS_ORIGINS, and it's the frontend image's NEXT_PUBLIC_API_BASE_URL
+# build arg (a rebuild, not a config change — see frontend.yaml / install/k8s/README.md).
 #
 # TLS: as with the compose setup, neither service serves HTTPS itself — terminate TLS at the
-# ingress controller. Uncomment the tls block and create the referenced secret (or use
-# cert-manager) if your controller doesn't already have a default certificate.
+# ingress controller. Uncomment the tls blocks and create the referenced secret (or use
+# cert-manager) if your controller doesn't already have a default certificate for this host.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: tender-bid
+  name: tender-bid-frontend
   # annotations:
   #   cert-manager.io/cluster-issuer: letsencrypt
 spec:
   ingressClassName: nginx
   # tls:
   #   - hosts:
-  #       - tender-bid.mg2.eglb.intel.com
-  #       - tender-bid-api.mg2.eglb.intel.com
-  #     secretName: tender-bid-tls
+  #       - ei-api.mg2.eglb.intel.com
+  #     secretName: ei-api-tls
   rules:
-    - host: tender-bid.mg2.eglb.intel.com
+    - host: ei-api.mg2.eglb.intel.com
       http:
         paths:
-          - path: /
+          - path: /tender-eval
             pathType: Prefix
             backend:
               service:
                 name: frontend
                 port:
                   name: http
-    - host: tender-bid-api.mg2.eglb.intel.com
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tender-bid-backend
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # nginx-ingress' default proxy timeouts (60s) are far shorter than the LLM-backed
+    # endpoints this API exposes take on a CPU-only Qwen3-30B-A3B deployment — section
+    # detection, judging, and especially /normalization/.../compare (the heaviest: compares
+    # every bidder against the tender in one call) routinely run well past that. Symptom:
+    # "504 Gateway Time-out" from nginx itself (not this app) while the backend keeps
+    # working — check the backend pod's own logs/DB state before assuming the request
+    # actually failed. Bumped generously since CPU inference throughput varies a lot by
+    # document size/bidder count; tighten if you have latency requirements that need it.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "1800"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "1800"
+    # cert-manager.io/cluster-issuer: letsencrypt
+spec:
+  ingressClassName: nginx
+  # tls:
+  #   - hosts:
+  #       - ei-api.mg2.eglb.intel.com
+  #     secretName: ei-api-tls
+  rules:
+    - host: ei-api.mg2.eglb.intel.com
       http:
         paths:
-          - path: /
-            pathType: Prefix
+          - path: /tender-eval-api(/|$)(.*)
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: backend
