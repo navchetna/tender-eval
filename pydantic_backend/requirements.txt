@@ -7,6 +7,7 @@ argcomplete==3.7.0
 asgiref==3.12.1
 attrs==26.1.0
 authlib==1.7.2
+backports-tarfile==1.2.0
 bcrypt==5.0.0
 beartype==0.22.9
 cachetools==7.1.4
@@ -43,6 +44,7 @@ httpx==0.28.1
 httpx-sse==0.4.3
 httpx2==2.7.0
 idna==3.18
+importlib-metadata==9.0.0
 jaraco-classes==3.4.0
 jaraco-context==6.1.2
 jaraco-functools==4.6.0
@@ -123,3 +125,4 @@ uvicorn==0.51.0
 wcwidth==0.8.2
 websockets==16.1
 wrapt==2.2.2
+zipp==4.1.0
