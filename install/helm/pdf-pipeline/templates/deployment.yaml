@@ -36,6 +36,12 @@ spec:
           envFrom:
             - configMapRef:
                 name: pdf-pipeline-config
+          env:
+            - name: VLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vlmApiKeySecret.name }}
+                  key: {{ .Values.vlmApiKeySecret.key }}
           volumeMounts:
             - name: outputs
               mountPath: /app/outputs

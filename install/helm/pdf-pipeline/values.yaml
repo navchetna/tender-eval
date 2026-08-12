@@ -4,26 +4,15 @@
 # --create-namespace on install instead (see README.md), keeping this in sync.
 namespaceOverride: pdf-pipeline
 
-# Locally built from a patched checkout of AIComps' source (see
-# input-handlers/pdf/parsers/docling/async/server/worker.py's _build_converter comment) —
-# the published ervin0307/pdf-pipeline:latest image has concurrency=64/timeout=180 baked
-# in, which fails every request against a single CPU-only vLLM instance (see
-# ../lighton-ocr/) once more than a couple of pages compete for the same core budget.
-# Rebuild with:
-#   cd <AIComps-checkout>/input-handlers/pdf/parsers/docling/async
-#   sudo nerdctl --namespace k8s.io build -t pdf-pipeline:local .
-# then `kubectl -n pdf-pipeline rollout restart deploy/pdf-pipeline` (IfNotPresent won't
-# pick up new content under the same tag on its own).
 image:
-  repository: pdf-pipeline
-  tag: local
+  repository: navchetna/pdf-pipeline
+  tag: latest
   pullPolicy: IfNotPresent
 
-replicaCount: 1  # keep at 1 — single-process uvicorn + in-process
-                 # ThreadPoolExecutor + local SQLite task store (see Chart README)
+replicaCount: 1
 
 service:
-  port: 8010       # matches the docling async service's own docker-compose convention
+  port: 8010
   targetPort: 8000
 
 # Set to false once you front this with the ingress below (or your own) — the
@@ -32,12 +21,28 @@ nodePort:
   enabled: true
   port: 30010
 
-# VLM_URL: the in-cluster LightOnOCR vLLM endpoint. Default matches the
-# release name/namespace used by ../lighton-ocr/vllm-model-values.yaml
-# (vllm-lighton-ocr-cpu, default namespace) — same api_base the toolkit's own
-# deploy-inference-models.yml playbook would produce for models=cpu-lighton-ocr,
-# so this is correct whichever path you deployed the model through.
-vlmUrl: "http://vllm-lighton-ocr-cpu-service.default.svc.cluster.local/v1/chat/completions"
+# VLM_URL: routed through the toolkit's own LiteLLM gateway so every OCR call is authenticated, rate-limited, and shows up in the
+# gateway's own request logs/spend tracking like every other model call in this
+# deployment — see ../lighton-ocr/ for where "lightonai/LightOnOCR-2-1B" gets
+# registered on the gateway in the first place.
+vlmUrl: "http://genai-gateway-service.genai-gateway.svc.cluster.local:4000/v1/chat/completions"
+
+# A dedicated LiteLLM key for this pipeline's own OCR calls (kept separate from
+# tender-eval's ADMIN_LITELLM_KEY/LITELLM_WORKER_API_KEY, which are for the LLM
+# evaluation calls, not OCR). Create it once and store it in this Secret before
+# installing:
+#
+#   MASTER=$(kubectl get deploy -n genai-gateway genai-gateway-deployment \
+#     -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="LITELLM_MASTER_KEY")].value}')
+#   KEY=$(kubectl run litellm-mint-pdfpipeline --rm -i --restart=Never --image=curlimages/curl -- \
+#     curl -s -X POST http://genai-gateway-service.genai-gateway.svc.cluster.local:4000/key/generate \
+#       -H "Authorization: Bearer $MASTER" -H "Content-Type: application/json" \
+#       -d '{"key_alias": "pdf-pipeline-vlm"}' | jq -r '.key')
+#   kubectl create secret generic pdf-pipeline-litellm --namespace pdf-pipeline \
+#     --from-literal=api-key="$KEY"
+vlmApiKeySecret:
+  name: pdf-pipeline-litellm
+  key: api-key
 
 persistence:
   outputs:

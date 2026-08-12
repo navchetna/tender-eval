@@ -1,6 +1,6 @@
-# PDF pipeline (AIComps async Docling)
+# PDF pipeline (async docling)
 
-Helm packaging of [`navchetna/AIComps`'s async Docling PDF pipeline](https://github.com/navchetna/AIComps/tree/main/input-handlers/pdf/parsers/docling/async) —
+Helm packaging of a standalone async docling-based PDF parsing pipeline —
 converts each submitted PDF into Markdown, a structured tree, a table of
 contents, and extracted figures, using LightOnOCR (served by vLLM — see
 [`../lighton-ocr/`](../lighton-ocr)) as its OCR/vision backend. This is what
@@ -17,9 +17,10 @@ which only works on that one node.
 - [`../lighton-ocr/`](../lighton-ocr) already deployed (or any other
   OpenAI-compatible endpoint serving `lightonai/LightOnOCR-2-1B` — set
   `vlmUrl` accordingly).
-- An image registry reachable from your cluster, if you're not using the
-  published `ervin0307/pdf-pipeline:latest` image — see the upstream
-  project's `Dockerfile` / `INSTALL.md` to build your own.
+- Your cluster needs pull access to `navchetna/pdf-pipeline` on Docker Hub —
+  this is our own patched build (see `values.yaml`'s `image:` comment for
+  why it isn't the upstream `ervin0307/pdf-pipeline:latest` image, and how
+  to rebuild/republish it if the source changes).
 
 ## Deploy
 
@@ -74,12 +75,13 @@ PARSER_BASE_URL=https://<cluster_url>/pdf-pipeline
 
 (or the NodePort/ClusterIP form above, if you didn't enable the Ingress).
 
-## Why the pipeline calls the model directly, not through the gateway
+## Why the pipeline calls the model through the gateway
 
-`server/worker.py` (upstream) calls `VLM_URL` — the LightOnOCR vLLM Service's
-own `/v1/chat/completions` — directly, not the toolkit's LiteLLM gateway.
-That's an internal, unauthenticated cluster-to-cluster call, so there's no
-API key to manage for it and no extra hop through the gateway. The model is
-still registered on the gateway separately (see `../lighton-ocr/`) so it's
-visible in the toolkit's model catalog even though this pipeline doesn't use
-that path itself.
+`server/worker.py` calls `VLM_URL` — the toolkit's LiteLLM gateway
+(`.../v1/chat/completions`), not the LightOnOCR vLLM Service directly — using
+a dedicated key (`vlmApiKeySecret` in `values.yaml`; see its comment for how
+to mint one). Routing through the gateway means every OCR call is
+authenticated and shows up in the gateway's own request logs and spend
+tracking, same as every other model call in this deployment — see
+`../lighton-ocr/` for where `lightonai/LightOnOCR-2-1B` gets registered on
+the gateway in the first place.
