@@ -65,13 +65,11 @@ model-backed stages are centrally hosted and reached purely by URL + credentials
 
 | Stage | Backing service | Config |
 |---|---|---|
-| PDF OCR/parsing | Enterprise agentic toolkit's PDF pipeline (the same docling + vision-model pipeline as the AIPC branch, just centrally deployed) | `PARSER_BASE_URL=https://ei-api.mg2.eglb.intel.com/pdf-pipeline` |
-| All LLM calls (section detection, row/header matching, judgment, scoring, comparison, notification drafting) | Enterprise agentic toolkit's LiteLLM gateway | `LITELLM_BASE_URL=https://ei-api.mg2.eglb.intel.com/v1`, model alias `LITELLM_MODEL=auto_router` |
+| PDF OCR/parsing | This solution's own PDF pipeline — the standalone AIComps docling parser (same one as the AIPC branch), packaged as a Helm chart (`install/helm/pdf-pipeline/`) and deployed onto the toolkit's cluster, backed by an OCR model registered on the toolkit's LiteLLM gateway (`install/helm/lighton-ocr/`) — **not** a component the toolkit ships itself | `PARSER_BASE_URL=https://ei-api.mg2.eglb.intel.com/pdf-pipeline` |
+| All LLM calls (section detection, row/header matching, judgment, scoring, comparison, notification drafting) | Enterprise agentic toolkit's LiteLLM gateway | `LITELLM_BASE_URL=https://ei-api.mg2.eglb.intel.com/v1`, `LITELLM_MODEL=Qwen/Qwen3-30B-A3B-Instruct-2507` |
 
 There's no fast/quality model split in this app's own code the way there is on the AIPC
-branch — every call asks the gateway for the single alias `auto_router`, and the gateway
-itself decides which underlying model actually answers each request. In the reference
-deployment the model behind that alias is **Qwen/Qwen3-30B-A3B-Instruct-2507** (a
+branch — every call asks the gateway directly for **Qwen/Qwen3-30B-A3B-Instruct-2507** (a
 mixture-of-experts model — 30B parameters with ~3B active per token — served by vLLM on
 Xeon; see [Prerequisite 0](#prerequisite-0--stand-up-the-enterprise-agent-toolkit) for how
 it gets deployed). What *does* vary per call is **whose key** makes it:
@@ -98,18 +96,22 @@ it up (including which model to deploy) and minting the keys yourself.
 
 ## Installation
 
-Because this app doesn't stand up model infrastructure of its own, installing it is just the
-app itself: Postgres + backend + frontend. The model infrastructure it consumes is the
-enterprise agent toolkit — if your organization already runs one, skip Prerequisite 0 and
-just collect its URL + keys; otherwise stand it up first.
+This app doesn't run any model infrastructure of its own — that's the enterprise agent
+toolkit, covered in Prerequisite 0 below (skip it if your organization already runs one; just
+collect its URL + keys). What's left to install is the app itself: backend + frontend, and
+Postgres only if you're using the docker-compose fallback below rather than the toolkit's own
+Postgres.
 
 ### Prerequisite 0 — stand up the enterprise agent toolkit
 
 Tender Evaluation is packaged as an **extension of the
 [Intel® AI for Enterprise Agent Toolkit](https://github.com/intel/enterprise-agent-toolkit)**:
 every LLM call goes to the toolkit's GenAI Gateway (LiteLLM), and every PDF parse goes to a
-PDF pipeline deployed on the same cluster. Neither exists until the toolkit is deployed, so
-that deployment is prerequisite zero.
+PDF pipeline deployed alongside it on the same cluster. That PDF pipeline is not part of the
+toolkit itself — it's the standalone AIComps docling task, which this solution packages as
+its own Helm chart (see step 5 below and [`install/helm/`](install/helm)) rather than
+something the toolkit provides out of the box. Neither the gateway's models nor the PDF
+pipeline exist until you deploy them, so that deployment is prerequisite zero.
 
 1. **Check the toolkit's own prerequisites** —
    [docs/prerequisites.md](https://github.com/intel/enterprise-agent-toolkit/blob/main/docs/prerequisites.md):
@@ -138,16 +140,11 @@ that deployment is prerequisite zero.
 3. **Deploy** — `./deploy-agentic-stack.sh`, then verify per the toolkit's
    [single-node](https://github.com/intel/enterprise-agent-toolkit/blob/main/docs/single-node-deployment.md)
    (or [multi-node](https://github.com/intel/enterprise-agent-toolkit/blob/main/docs/multi-node-deployment.md))
-   guide — all pods `Running`, and `GET /v1/models` on the gateway listing the Qwen model.
+   guide — all pods `Running`, and `GET /v1/models` on the gateway listing
+   `Qwen/Qwen3-30B-A3B-Instruct-2507`. This app's `LITELLM_MODEL` is set to that exact model
+   name (see the table above) — no separate alias/router registration needed.
 
-4. **Register the `auto_router` alias** — this app asks the gateway for the model name
-   `auto_router` (`LITELLM_MODEL=auto_router`), so that name has to exist on the gateway.
-   Either set up the toolkit's semantic router (Step 1b of the single-node guide) and give
-   the router that name when registering it, or — with only the one Qwen model deployed —
-   simply set this app's `LITELLM_MODEL=Qwen/Qwen3-30B-A3B-Instruct-2507` instead and skip
-   the alias entirely.
-
-5. **Issue keys from the gateway** — retrieve the LiteLLM master key from the cluster:
+4. **Issue keys from the gateway** — retrieve the LiteLLM master key from the cluster:
 
    ```bash
    kubectl get deploy -n genai-gateway genai-gateway-deployment \
@@ -159,12 +156,10 @@ that deployment is prerequisite zero.
    unattended background worker (`LITELLM_WORKER_API_KEY`), and one per reviewer (assigned
    at `POST /employees` time — see [Add reviewers](#add-reviewers) below).
 
-6. **Deploy the PDF pipeline** — the OCR/parsing stage is *not* part of the toolkit's base
-   stack; it's the async docling parser from
-   [navchetna/AIComps](https://github.com/navchetna/AIComps)
-   (`input-handlers/pdf/parsers/docling/async`), deployed onto the same cluster and exposed
-   under the gateway host at `/pdf-pipeline` — that URL becomes this app's
-   `PARSER_BASE_URL`.
+5. **Deploy the PDF pipeline** — Helm charts in [`install/helm/`](install/helm) do this: the
+   OCR model + gateway registration (`lighton-ocr/`), then the pipeline itself
+   (`pdf-pipeline/`). See [`install/helm/README.md`](install/helm/README.md) for the deploy
+   order and commands.
 
 In the reference deployment all of this resolves to `ei-api.mg2.eglb.intel.com`
 (`LITELLM_BASE_URL=https://ei-api.mg2.eglb.intel.com/v1`,
@@ -179,16 +174,61 @@ In the reference deployment all of this resolves to `ei-api.mg2.eglb.intel.com`
   `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
   — this one you *do* generate yourself, it's local-only and never leaves this deployment).
 - A Google Cloud project with the Gmail API + Drive API enabled, and a **Desktop application**
-  OAuth client (`GMAIL_CLIENT_ID`/`GMAIL_CLIENT_SECRET`).
+  OAuth client (`GMAIL_CLIENT_ID`/`GMAIL_CLIENT_SECRET`) — create one at
+  [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials),
+  **Create Credentials → OAuth client ID → Desktop app**.
 - A [Logfire](https://logfire.pydantic.dev) project + write token (`LOGFIRE_TOKEN`) — required
   in a container, which has no local `logfire auth` session to fall back on.
-- This assumes `tender-bid-api.mg2.eglb.intel.com` / `tender-bid.mg2.eglb.intel.com` are
-  already fronted by a reverse proxy terminating TLS and forwarding to this stack's published
-  ports (`8011` backend, `3002` frontend) — neither service here serves HTTPS itself. Adjust
-  `CORS_ORIGINS` and the frontend's `NEXT_PUBLIC_API_BASE_URL` build arg in
-  `docker-compose.yaml` if your real hostnames differ.
+- This assumes `<your-backend-domain>` / `<your-frontend-domain>` are already fronted by a
+  reverse proxy terminating TLS and forwarding to this stack's published ports (`8011`
+  backend, `3002` frontend) — neither service here serves HTTPS itself. Set `CORS_ORIGINS`
+  and the frontend's `NEXT_PUBLIC_API_BASE_URL` build arg in `docker-compose.yaml` to your
+  own hostnames — this project doesn't provide or assume any specific domain.
 
-### Bring up the stack
+### Bring up the stack (Kubernetes)
+
+This is the reference deployment path — the same kind of cluster the enterprise agent
+toolkit itself runs on (Prerequisite 0), so the backend and frontend land next to it rather
+than on a separate docker host. Full walkthrough (build/push the images, create the secret,
+apply the manifests, ingress, the one-time `/setup/database` bootstrap) lives in
+[`install/k8s/`](install/k8s/README.md); summary:
+
+```bash
+# 1. Build + push the backend/frontend images (from the repo root — see install/k8s/README.md)
+# 2. Create the backend-env secret (backend.env, including DATABASE_URL — see below)
+# 3. Deploy
+kubectl apply -k install/k8s
+kubectl -n tender-bid get pods -w   # wait for backend and frontend to go Ready
+```
+
+No Postgres is deployed here — `DATABASE_URL` in `backend.env` points at the enterprise
+agent toolkit's own Postgres instead (see [install/k8s/README.md](install/k8s/README.md) for
+the exact secret contents). One-time schema init + admin bootstrap:
+
+```bash
+kubectl -n tender-bid port-forward svc/backend 8011:8011 &
+curl -X POST http://localhost:8011/setup/database
+kill %1
+```
+
+This creates the schema and bootstraps the first employee as `ADMIN_EMAIL`/`ADMIN_PASSWORD`
+with `ADMIN_LITELLM_KEY` attached, so there's an admin account (and a usable LiteLLM key)
+from the very first boot.
+
+Verify:
+
+```bash
+curl -s https://ei-api.mg2.eglb.intel.com/tender-eval-api/health
+curl -s -o /dev/null -w "%{http_code}\n" https://ei-api.mg2.eglb.intel.com/tender-eval   # frontend — open in a browser to actually use it
+```
+
+(Sharing the toolkit's own ingress host via sub-paths, same as the PDF pipeline's `/pdf-pipeline` — see [`install/k8s/ingress.yaml`](install/k8s/ingress.yaml). If you have your own separate hostnames instead, use those with path `/` on each.)
+
+### Alternative: docker compose (standalone / local dev)
+
+For a single-machine bring-up without a Kubernetes cluster — e.g. local development, or a
+quick demo against an already-running toolkit — docker compose bundles its own Postgres as
+a standalone fallback instead of pointing at the toolkit's:
 
 ```bash
 cd install/docker
@@ -200,9 +240,11 @@ docker compose -f docker-compose.yaml up -d --build
 
 This starts:
 
-- **`postgres`** — the app's own store (projects, files, evaluations, employees).
+- **`postgres`** — the app's own store (projects, files, evaluations, employees); the
+  standalone fallback, not the toolkit's Postgres used by the Kubernetes path above.
 - **`backend`** (`:8011`) — the FastAPI app: Gmail ingestion, parsing orchestration (talking
-  to the enterprise PDF pipeline above), section detection, evaluation, and the
+  to the `pdf-pipeline` Helm chart from Prerequisite 0, step 5 — this solution's own PDF
+  pipeline deployment, not part of the toolkit), section detection, evaluation, and the
   review/normalization API.
 - **`frontend`** (`:3002`) — the reviewer-facing UI.
 
@@ -212,10 +254,6 @@ One-time schema init + admin bootstrap:
 curl -X POST http://localhost:8011/setup/database
 ```
 
-This creates the schema and bootstraps the first employee as `ADMIN_EMAIL`/`ADMIN_PASSWORD`
-with `ADMIN_LITELLM_KEY` attached, so there's an admin account (and a usable LiteLLM key)
-from the very first boot.
-
 Verify:
 
 ```bash
@@ -223,15 +261,6 @@ docker compose ps
 curl -s http://localhost:8011/health
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3002   # frontend — open in a browser to actually use it
 ```
-
-### Alternative: deploy on Kubernetes
-
-The backend and frontend can be deployed onto a Kubernetes cluster instead of docker compose —
-manifests and a full walkthrough (image build/push, secrets, ingress, the same one-time
-`/setup/database` bootstrap) live in [`install/k8s/`](install/k8s/README.md). Unlike the
-compose setup, no fallback Postgres is bundled: the k8s deployment points `DATABASE_URL` at
-the enterprise agent toolkit's Postgres, as in the reference deployment. The prerequisites
-above apply unchanged; only the deployment mechanics differ.
 
 ```bash
 kubectl apply -k install/k8s   # after the build/push + secrets steps in install/k8s/README.md

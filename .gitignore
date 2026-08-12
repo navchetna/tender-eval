@@ -81,11 +81,15 @@ coverage.xml
 .env.*
 !install/docker/.env.example
 install/docker/backend.env
+!install/k8s/backend.env.example
+install/k8s/backend.env
+install/k8s/.bootstrapped
+!pydantic_backend/.env.example
 
 # Output directories
 output/
 logs/
-out
+*out*
 
 # VS Code and IDEs
 .vscode/

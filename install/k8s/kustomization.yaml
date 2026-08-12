@@ -1,5 +1,6 @@
 # Deploy with `kubectl apply -k install/k8s` — but read README.md first: the two images must
-# be built and pushed, and the two secrets created, before anything here will start.
+# be built (and pushed, if using a registry), and the two secrets created, before anything
+# here will start.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -11,12 +12,15 @@ resources:
   - frontend.yaml
   - ingress.yaml
 
-# Point these at wherever you pushed the images built in README.md step 1. The bare names
-# on the left are the placeholders used in backend.yaml / frontend.yaml.
+# Default here: images built locally with nerdctl straight into the k8s.io containerd
+# namespace (no registry — see README.md step 1), so newName just keeps the bare local
+# image name and newTag picks the tag used at build time. If you push to a real registry
+# instead, set newName to that registry path and switch imagePullPolicy back to Always in
+# backend.yaml / frontend.yaml.
 images:
   - name: tender-bid-backend
-    newName: registry.example.com/tender-bid-backend
-    newTag: latest
+    newName: tender-bid-backend
+    newTag: local
   - name: tender-bid-frontend
-    newName: registry.example.com/tender-bid-frontend
-    newTag: latest
+    newName: tender-bid-frontend
+    newTag: local

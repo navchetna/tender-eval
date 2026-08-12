@@ -57,6 +57,10 @@ spec:
       containers:
         - name: backend
           image: tender-bid-backend
+          # IfNotPresent: use a locally built image (e.g. via nerdctl into the
+          # k8s.io containerd namespace, no registry) without kubelet trying
+          # to pull it. Change to Always once you push to a real registry.
+          imagePullPolicy: IfNotPresent
           envFrom:
             # Includes DATABASE_URL — the toolkit's Postgres, not one deployed here.
             - secretRef:
