@@ -92,7 +92,8 @@ logs/
 *out*
 
 # VS Code and IDEs
-.vscode/
+.vscode/*
+!.vscode/settings.json
 .idea/
 
 # Miscellaneous
