@@ -1290,13 +1290,13 @@
       "updated": 1,
       "link": null,
       "locked": false,
-      "text": "GenAI Gateway \u00b7 LiteLLM\nauto_router \u00b7 virtual keys",
+      "text": "GenAI Gateway \u00b7 LiteLLM\nQwen3-30B-A3B \u00b7 virtual keys",
       "fontSize": 12,
       "fontFamily": 3,
       "textAlign": "center",
       "verticalAlign": "middle",
       "containerId": "gateway",
-      "originalText": "GenAI Gateway \u00b7 LiteLLM\nauto_router \u00b7 virtual keys",
+      "originalText": "GenAI Gateway \u00b7 LiteLLM\nQwen3-30B-A3B \u00b7 virtual keys",
       "lineHeight": 1.25
     },
     {
