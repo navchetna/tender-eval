@@ -1,9 +1,9 @@
 # Helm: LightOnOCR + PDF pipeline, on top of the enterprise agent toolkit
 
-These two charts are what [Prerequisite 0](../../README.md#prerequisite-0--stand-up-the-enterprise-agent-toolkit)'s
+These two charts are what [Prerequisite 0](../../README.md#0-stand-up-the-enterprise-agent-toolkit)'s
 step 6 ("deploy the PDF pipeline") actually means in practice. They deploy
-the standalone [`AIComps` async Docling pipeline](https://github.com/navchetna/AIComps/tree/main/input-handlers/pdf/parsers/docling/async)
-onto the same cluster as the toolkit, backed by an OCR model registered on
+a standalone docling-based PDF parsing pipeline onto the same cluster as
+the toolkit, backed by an OCR model registered on
 the toolkit's own LiteLLM gateway — reusing the toolkit's existing vLLM chart
 and gateway-registration pattern rather than duplicating them.
 
@@ -15,8 +15,14 @@ and gateway-registration pattern rather than duplicating them.
 2. **[`lighton-ocr/`](lighton-ocr)** — deploys `lightonai/LightOnOCR-2-1B`
    with the toolkit's own `vllm` chart (step 1 in that chart's README), then
    registers it on the gateway with a small chart of our own (step 2).
-3. **[`pdf-pipeline/`](pdf-pipeline)** — deploys the AIComps async Docling
-   service, pointed at the LightOnOCR service from step 2.
+   **Before running this, edit `vllm-model-values.yaml`'s CPU/memory sizing
+   (`VLLM_CPU_KVCACHE_SPACE`, `VLLM_CPU_OMP_THREADS_BIND`, `cpu`, `memory`) —
+   those values are tuned for one specific server and will crash or OOMKill
+   on different hardware. See [`lighton-ocr/README.md`](lighton-ocr/README.md#before-you-deploy-tune-sizing-to-your-own-server)
+   for exactly what to change and how to derive the right values (`lscpu` /
+   `htop`).**
+3. **[`pdf-pipeline/`](pdf-pipeline)** — deploys the async docling
+   parsing service, pointed at the LightOnOCR service from step 2.
 4. **Point tender-eval at it** — set `PARSER_BASE_URL` in `backend.env` (see
    [`../docker/backend.env.example`](../docker/backend.env.example)) to
    wherever `pdf-pipeline`'s Ingress/NodePort ends up (step 3's chart exposes
@@ -57,8 +63,9 @@ the pieces are split the way they are.
   than reimplemented. Registering that model is the one piece the toolkit
   doesn't automate outside its own ansible playbook, so that's the one piece
   packaged here.
-- **`pdf-pipeline`** has no equivalent upstream chart to reuse — AIComps
-  ships Kustomize manifests, not Helm — so it's a from-scratch chart built
-  from those manifests (with one fix: persistent volumes for both
+- **`pdf-pipeline`** has no equivalent upstream chart to reuse — the source
+  it's built from ships Kustomize manifests, not Helm — so it's a
+  from-scratch chart built from those manifests (with one fix: persistent
+  volumes for both
   `/app/outputs` and `/data`, where the upstream manifests only persisted
   `/data` and used a dev-machine-specific `hostPath` for outputs).

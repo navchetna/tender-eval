@@ -29,6 +29,26 @@ deployment. Instead:
 - `kubectl` context pointed at that cluster.
 - A HuggingFace token with read access to `lightonai/LightOnOCR-2-1B`.
 
+## Before you deploy: tune sizing to your own server
+
+`vllm-model-values.yaml` ships with `VLLM_CPU_KVCACHE_SPACE`, `VLLM_CPU_OMP_THREADS_BIND`,
+`cpu:`, and `memory:` values derived from one specific node — they will not transfer
+correctly to different hardware. Check yours first:
+
+```bash
+lscpu   # NUMA node layout — which core IDs belong to which node, and which are
+        # physical cores vs. hyperthread siblings (see VLLM_CPU_OMP_THREADS_BIND's
+        # own comment in vllm-model-values.yaml for how to read this and pick cores)
+htop    # actual available memory headroom on this node, to size `memory:` against
+```
+
+Then edit `vllm-model-values.yaml`: set `VLLM_CPU_OMP_THREADS_BIND` to your own NUMA
+node's physical core IDs, `cpu:` to match that core count, `VLLM_CPU_KVCACHE_SPACE` to
+what your real free memory supports, and `memory:` generously above that. Getting these
+wrong isn't just a performance hit — wrong core IDs crash the pod at startup, and
+undersized memory OOMKills it under real load (both happened while tuning this for the
+reference cluster; see the comments in that file for the actual failures observed).
+
 ## 1. Deploy the model (toolkit's chart, our values)
 
 ```bash

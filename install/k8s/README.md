@@ -194,6 +194,11 @@ The external one should time out; the internal one should return `401` (needs au
 
 ## 3. Deploy
 
+**Step 2's `backend-env` secret must exist before this step** — the Deployment references it
+via `envFrom`, and if it's missing the pod won't crash, it'll sit in a restart loop with
+`Error: secret "backend-env" not found` in `kubectl describe pod`'s Events. If you see that,
+go back and create the secret, then re-apply.
+
 From the repo root:
 
 ```bash

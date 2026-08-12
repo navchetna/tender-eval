@@ -8,6 +8,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: frontend
+  namespace: tender-bid
 spec:
   selector:
     app: frontend
@@ -20,6 +21,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: frontend
+  namespace: tender-bid
 spec:
   # The frontend is stateless — safe to scale up, unlike the backend.
   replicas: 1

@@ -1,14 +1,38 @@
-# Tender Evaluation — Datacenter Edition
+# Tender Evaluation
 
-This is the **datacenter/enterprise** deployment of the Tender Evaluation platform: it
-doesn't run or manage any model itself — every LLM call and every PDF-OCR call is routed to
-Intel's centrally-hosted enterprise agentic toolkit (`ei-api.mg2.eglb.intel.com`), and each
-reviewer is billed/attributed on that shared gateway through their own personal key. This is
-`main`; there is also an **`Ervin0307/aipc`** branch that instead runs every model on-device
-(Intel NPU + Arc GPU, plus one cloud call) for a single-machine AI PC deployment — the two
-branches are intentionally separate and not meant to be merged. If you're standing up a
-laptop/workstation demo rather than a shared, centrally-managed deployment, use that branch
-instead; this README only covers `main`.
+An AI-assisted pipeline that reads incoming tender and bid PDFs straight from Gmail, OCRs
+them into structured data, finds and aligns their Technical Requirements and Price sections
+across every bidder, and produces a plain-language, traceable comparison — with a human
+reviewer approving or correcting every AI suggestion along the way. Built as an extension of
+the [Intel® AI for Enterprise Agent Toolkit](https://github.com/intel/enterprise-agent-toolkit),
+so the OCR, LLM, and PDF-parsing infrastructure it depends on is shared, centrally-managed
+capacity rather than something each deployment stands up itself.
+
+**What you get:**
+- **Ingest by email or upload** — drop a tender + bid PDFs in Gmail and the background
+  worker versions and files them automatically, or upload them directly from the UI when
+  you'd rather not wait on the inbox poll — both land in the same versioned pipeline.
+- **Layout-aware OCR** — a vision-language model turns each PDF into Markdown, a table of
+  contents, and a structured tree, so headings and tables survive, not just flattened text.
+- **AI-suggested, human-approved** — every automatic classification (which section is
+  Technical Requirements, which is Price) is a suggestion a reviewer confirms or corrects;
+  the AI never has the final say.
+- **Traceable comparisons** — the final side-by-side bidder comparison links back to the
+  exact section/row it came from, so "why was Bidder B marked non-compliant" always has an
+  answer.
+- **Per-reviewer attribution** — every model call is billed/attributed to the reviewer, admin,
+  or background worker that triggered it, on the toolkit's own shared gateway.
+
+## Two deployment modes — pick your branch
+
+This is `main`, the **datacenter/enterprise** deployment: every LLM call routes to the
+toolkit's pre-existing, centrally-hosted Qwen deployment, and the OCR model runs on that same
+shared cluster (deployed via [`install/helm/`](install/helm), specifically for this app —
+see there for why) rather than anywhere near the reviewer's own machine. There's also an
+**`Ervin0307/aipc`** branch that instead runs every model on-device (Intel NPU + Arc GPU, plus
+one optional cloud call) for a single-machine AI PC demo. The two are intentionally separate and not
+meant to be merged — if you're standing up a laptop/workstation demo rather than a shared,
+centrally-managed deployment, use that branch instead; this README only covers `main`.
 
 ## Problem statement
 
@@ -23,8 +47,9 @@ marked non-compliant on row 12?").
 
 ## What this solution does
 
-1. **Ingest** — a tender email (and any number of bidder-response emails) arrives in Gmail;
-   the pipeline picks up unread PDF attachments and files them into a versioned project.
+1. **Ingest** — a tender email (and any number of bidder-response emails) arrives in Gmail and
+   the background worker picks up unread PDF attachments automatically, or a reviewer uploads
+   them directly from the UI; either way they're filed into a versioned project.
 2. **Parse** — each PDF is OCR'd by a vision-language model into Markdown plus a structured
    tree + table-of-contents, so the document's actual layout (sections, tables, headings) is
    preserved as data, not just flattened text.
@@ -46,7 +71,7 @@ Agent Toolkit** that serves the models behind them. PDF parsing is a standalone 
 async docling parser) that turns each PDF into **Markdown, a TOC, and an output tree**,
 calling the gateway-served **LightOnOCR-2-1B** for OCR; section identification, alignment,
 and judging/scoring all hit the gateway's **Qwen3-30B-A3B** (and Postgres holds the pipeline
-state). Diagram source: [editable Excalidraw file](docs/architecture-flow.excalidraw).
+state).
 
 ![Architecture Flow](docs/architecture-flow.png)
 
@@ -60,18 +85,17 @@ attribution notes below.
 
 ## Models — where they run, and how this app reaches them
 
-Unlike the AIPC branch, this deployment doesn't stand up any model server itself. Both
-model-backed stages are centrally hosted and reached purely by URL + credentials:
+Both model-backed stages are reached purely by URL + credentials:
 
 | Stage | Backing service | Config |
 |---|---|---|
-| PDF OCR/parsing | This solution's own PDF pipeline — the standalone AIComps docling parser (same one as the AIPC branch), packaged as a Helm chart (`install/helm/pdf-pipeline/`) and deployed onto the toolkit's cluster, backed by an OCR model registered on the toolkit's LiteLLM gateway (`install/helm/lighton-ocr/`) — **not** a component the toolkit ships itself | `PARSER_BASE_URL=https://ei-api.mg2.eglb.intel.com/pdf-pipeline` |
+| PDF OCR/parsing | A standalone docling-based parsing task (same one as the AIPC branch), packaged as a Helm chart (`install/helm/pdf-pipeline/`) and deployed onto the toolkit's cluster, backed by an OCR model registered on the toolkit's LiteLLM gateway (`install/helm/lighton-ocr/`) — **not** a component the toolkit ships itself | `PARSER_BASE_URL=https://ei-api.mg2.eglb.intel.com/pdf-pipeline` |
 | All LLM calls (section detection, row/header matching, judgment, scoring, comparison, notification drafting) | Enterprise agentic toolkit's LiteLLM gateway | `LITELLM_BASE_URL=https://ei-api.mg2.eglb.intel.com/v1`, `LITELLM_MODEL=Qwen/Qwen3-30B-A3B-Instruct-2507` |
 
 There's no fast/quality model split in this app's own code the way there is on the AIPC
 branch — every call asks the gateway directly for **Qwen/Qwen3-30B-A3B-Instruct-2507** (a
 mixture-of-experts model — 30B parameters with ~3B active per token — served by vLLM on
-Xeon; see [Prerequisite 0](#prerequisite-0--stand-up-the-enterprise-agent-toolkit) for how
+Xeon; see [Prerequisite 0](#0-stand-up-the-enterprise-agent-toolkit) for how
 it gets deployed). What *does* vary per call is **whose key** makes it:
 
 - **Each employee has their own LiteLLM key**, assigned by an admin when the employee is
@@ -88,7 +112,7 @@ it gets deployed). What *does* vary per call is **whose key** makes it:
 All of these — `LITELLM_WORKER_API_KEY`, `ADMIN_LITELLM_KEY`, and every reviewer's own key —
 are minted on the toolkit's gateway by whoever administers it for your organization; this app
 only consumes them, it doesn't provision them. If nobody runs that toolkit for you yet, see
-[Prerequisite 0](#prerequisite-0--stand-up-the-enterprise-agent-toolkit) below for standing
+[Prerequisite 0](#0-stand-up-the-enterprise-agent-toolkit) below for standing
 it up (including which model to deploy) and minting the keys yourself.
 (`LITELLM_KEY_ENCRYPTION_KEY` is the exception — it's generated locally, see Prerequisites.)
 
@@ -96,19 +120,20 @@ it up (including which model to deploy) and minting the keys yourself.
 
 ## Installation
 
-This app doesn't run any model infrastructure of its own — that's the enterprise agent
-toolkit, covered in Prerequisite 0 below (skip it if your organization already runs one; just
-collect its URL + keys). What's left to install is the app itself: backend + frontend, and
-Postgres only if you're using the docker-compose fallback below rather than the toolkit's own
-Postgres.
+Installing the app itself is backend + frontend, and Postgres only if you're using the
+docker-compose fallback below rather than the toolkit's own Postgres. Prerequisite 0 covers
+standing up the enterprise agent toolkit — skip it and just collect its URL + keys if your
+organization already runs one.
 
-### Prerequisite 0 — stand up the enterprise agent toolkit
+### Prerequisites
+
+#### 0. Stand up the enterprise agent toolkit
 
 Tender Evaluation is packaged as an **extension of the
 [Intel® AI for Enterprise Agent Toolkit](https://github.com/intel/enterprise-agent-toolkit)**:
 every LLM call goes to the toolkit's GenAI Gateway (LiteLLM), and every PDF parse goes to a
 PDF pipeline deployed alongside it on the same cluster. That PDF pipeline is not part of the
-toolkit itself — it's the standalone AIComps docling task, which this solution packages as
+toolkit itself — it's a standalone docling-based parsing task, which this solution packages as
 its own Helm chart (see step 5 below and [`install/helm/`](install/helm)) rather than
 something the toolkit provides out of the box. Neither the gateway's models nor the PDF
 pipeline exist until you deploy them, so that deployment is prerequisite zero.
@@ -166,11 +191,9 @@ In the reference deployment all of this resolves to `ei-api.mg2.eglb.intel.com`
 `PARSER_BASE_URL=https://ei-api.mg2.eglb.intel.com/pdf-pipeline`) — substitute your own
 `cluster_url` everywhere those appear in `backend.env`.
 
-### Prerequisites
+#### Everything else you need
 
-- Access to the enterprise agent toolkit deployment above: an admin LiteLLM key, a worker
-  LiteLLM key, and a Fernet encryption key for storing employee keys at rest (generate your
-  own with
+- A Fernet encryption key for storing employee keys at rest (generate your own with
   `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
   — this one you *do* generate yourself, it's local-only and never leaves this deployment).
 - A Google Cloud project with the Gmail API + Drive API enabled, and a **Desktop application**
@@ -189,40 +212,31 @@ In the reference deployment all of this resolves to `ei-api.mg2.eglb.intel.com`
 
 This is the reference deployment path — the same kind of cluster the enterprise agent
 toolkit itself runs on (Prerequisite 0), so the backend and frontend land next to it rather
-than on a separate docker host. Full walkthrough (build/push the images, create the secret,
-apply the manifests, ingress, the one-time `/setup/database` bootstrap) lives in
-[`install/k8s/`](install/k8s/README.md); summary:
+than on a separate docker host.
+
+**Recommended: [`install/k8s/install.sh`](install/k8s/README.md#quick-start-installsh)** — one
+script that creates the database, mints keys, builds both images, deploys, bootstraps the
+schema (once), and verifies. It's idempotent — safe to re-run any time you change
+`backend.env` or the app's code, not just on first setup:
+
+```bash
+cd install/k8s
+cp backend.env.example backend.env   # fill in the values the script tells you are still blank
+./install.sh
+```
+
+**If you ran `install.sh` above, you're done — skip to [Add reviewers](#add-reviewers).**
+Everything below is the manual equivalent of what it just did for you, useful for debugging
+or if you'd rather do it by hand:
 
 ```bash
 # 1. Build + push the backend/frontend images (from the repo root — see install/k8s/README.md)
 # 2. Create the backend-env secret (backend.env, including DATABASE_URL — see below)
 # 3. Deploy
+cd ../..
 kubectl apply -k install/k8s
 kubectl -n tender-bid get pods -w   # wait for backend and frontend to go Ready
 ```
-
-No Postgres is deployed here — `DATABASE_URL` in `backend.env` points at the enterprise
-agent toolkit's own Postgres instead (see [install/k8s/README.md](install/k8s/README.md) for
-the exact secret contents). One-time schema init + admin bootstrap:
-
-```bash
-kubectl -n tender-bid port-forward svc/backend 8011:8011 &
-curl -X POST http://localhost:8011/setup/database
-kill %1
-```
-
-This creates the schema and bootstraps the first employee as `ADMIN_EMAIL`/`ADMIN_PASSWORD`
-with `ADMIN_LITELLM_KEY` attached, so there's an admin account (and a usable LiteLLM key)
-from the very first boot.
-
-Verify:
-
-```bash
-curl -s https://ei-api.mg2.eglb.intel.com/tender-eval-api/health
-curl -s -o /dev/null -w "%{http_code}\n" https://ei-api.mg2.eglb.intel.com/tender-eval   # frontend — open in a browser to actually use it
-```
-
-(Sharing the toolkit's own ingress host via sub-paths, same as the PDF pipeline's `/pdf-pipeline` — see [`install/k8s/ingress.yaml`](install/k8s/ingress.yaml). If you have your own separate hostnames instead, use those with path `/` on each.)
 
 ### Alternative: docker compose (standalone / local dev)
 
@@ -264,16 +278,6 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3002   # frontend — 
 
 ```bash
 kubectl apply -k install/k8s   # after the build/push + secrets steps in install/k8s/README.md
-```
-
-### Add reviewers
-
-Every other employee needs their own LiteLLM key assigned at creation time:
-
-```bash
-curl -X POST http://localhost:8011/employees \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Jane Reviewer", "email": "jane@example.com", "password": "change-me", "litellm_key": "<their assigned enterprise agentic toolkit key>"}'
 ```
 
 From here, the day-to-day usage flow (ingest → parse → detect → review → compare) is
