@@ -54,18 +54,3 @@ cd ..
 
 See each chart's own README for prerequisites, verification steps, and why
 the pieces are split the way they are.
-
-## Why two charts instead of one
-
-- **`lighton-ocr`** only adds gateway *registration* — the model server
-  itself is deployed with the toolkit's own, already-hardened `vllm` chart
-  (CPU tuning, security context, HF token secret, PVC), reused as-is rather
-  than reimplemented. Registering that model is the one piece the toolkit
-  doesn't automate outside its own ansible playbook, so that's the one piece
-  packaged here.
-- **`pdf-pipeline`** has no equivalent upstream chart to reuse — the source
-  it's built from ships Kustomize manifests, not Helm — so it's a
-  from-scratch chart built from those manifests (with one fix: persistent
-  volumes for both
-  `/app/outputs` and `/data`, where the upstream manifests only persisted
-  `/data` and used a dev-machine-specific `hostPath` for outputs).
