@@ -208,7 +208,7 @@ In the reference deployment all of this resolves to `ei-api.mg2.eglb.intel.com`
   and the frontend's `NEXT_PUBLIC_API_BASE_URL` build arg in `docker-compose.yaml` to your
   own hostnames — this project doesn't provide or assume any specific domain.
 
-### Bring up the stack (Kubernetes)
+### Bring up the tender-eval application
 
 This is the reference deployment path — the same kind of cluster the enterprise agent
 toolkit itself runs on (Prerequisite 0), so the backend and frontend land next to it rather
