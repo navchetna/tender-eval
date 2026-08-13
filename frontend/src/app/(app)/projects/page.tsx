@@ -308,39 +308,41 @@ export default function ProjectsPage() {
 
   return (
     <div className="px-[30px] py-[26px]">
-      <div className="mb-[22px] flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="m-0 text-[21px] font-semibold text-ink">Projects</h1>
-          <p className="mt-[5px] text-[13.5px] text-ink-soft">
+      <div className="mb-[22px]">
+        <h1 className="m-0 text-[21px] font-semibold text-ink">Projects</h1>
+        <div className="mt-[5px] flex flex-wrap items-center justify-between gap-3">
+          <p className="text-[13.5px] text-ink-soft">
             Each project has one tender and its bidders. Reconciliation runs continuously as documents arrive.
           </p>
-        </div>
-        {user?.role === "ADMIN" && (
-          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-            <div className="flex min-w-[168px] justify-center">
-              <Pill tone={gmailAuthorized === null ? "none" : gmailAuthorized ? "ok" : "bad"}>
-                {gmailAuthorized === null ? "Checking Gmail…" : gmailAuthorized ? "Gmail connected" : "Gmail not authorized"}
-              </Pill>
+          {user?.role === "ADMIN" && (
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+              <div className="flex items-center gap-[6px]">
+                <div className="flex min-w-[76px] justify-center">
+                  <Pill tone={gmailAuthorized === null ? "none" : gmailAuthorized ? "ok" : "bad"}>
+                    {gmailAuthorized === null ? "Checking…" : gmailAuthorized ? "Connected" : "Not authorized"}
+                  </Pill>
+                </div>
+                <button
+                  onClick={onCheckGmail}
+                  disabled={checkingGmail}
+                  className="btn flex min-w-[196px] items-center gap-[6px] rounded-[8px] border-[0.5px] border-line-strong bg-surface px-[10px] py-[6px] text-[12.5px] text-ink disabled:opacity-60"
+                >
+                  <Mail size={14} />
+                  {checkingGmail ? "Checking…" : "Check Gmail for new tenders"}
+                </button>
+              </div>
+              <button
+                onClick={onParsePending}
+                disabled={parsing}
+                className="btn flex min-w-[172px] items-center gap-[6px] rounded-[8px] border-[0.5px] border-line-strong bg-surface px-[10px] py-[6px] text-[12.5px] text-ink disabled:opacity-60"
+              >
+                <RefreshCw size={14} />
+                {parsing ? "Parsing…" : "Parse pending documents"}
+              </button>
+              <NewProjectForm onCreated={load} />
             </div>
-            <button
-              onClick={onCheckGmail}
-              disabled={checkingGmail}
-              className="btn flex min-w-[236px] items-center gap-[7px] rounded-[9px] border-[0.5px] border-line-strong bg-surface px-[14px] py-2 text-[13px] text-ink disabled:opacity-60"
-            >
-              <Mail size={15} />
-              {checkingGmail ? "Checking…" : "Check Gmail for new tenders"}
-            </button>
-            <button
-              onClick={onParsePending}
-              disabled={parsing}
-              className="btn flex min-w-[206px] items-center gap-[7px] rounded-[9px] border-[0.5px] border-line-strong bg-surface px-[14px] py-2 text-[13px] text-ink disabled:opacity-60"
-            >
-              <RefreshCw size={15} />
-              {parsing ? "Parsing…" : "Parse pending documents"}
-            </button>
-            <NewProjectForm onCreated={load} />
-          </div>
-        )}
+          )}
+        </div>
       </div>
       {error && <div className="mb-4 rounded-[9px] bg-bad-bg px-3 py-2 text-[12.5px] text-bad-fg">{error}</div>}
       {summaries === null && !error && <Empty>Loading…</Empty>}
