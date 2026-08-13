@@ -316,10 +316,12 @@ export default function ProjectsPage() {
           </p>
         </div>
         {user?.role === "ADMIN" && (
-          <div className="flex flex-wrap items-center gap-2">
-            {gmailAuthorized !== null && (
-              <Pill tone={gmailAuthorized ? "ok" : "bad"}>{gmailAuthorized ? "Gmail connected" : "Gmail not authorized"}</Pill>
-            )}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex min-w-[168px] justify-center">
+              <Pill tone={gmailAuthorized === null ? "none" : gmailAuthorized ? "ok" : "bad"}>
+                {gmailAuthorized === null ? "Checking Gmail…" : gmailAuthorized ? "Gmail connected" : "Gmail not authorized"}
+              </Pill>
+            </div>
             <button
               onClick={onCheckGmail}
               disabled={checkingGmail}
