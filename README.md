@@ -223,20 +223,12 @@ schema (once), and verifies. It's idempotent — safe to re-run any time you cha
 cd ../k8s
 cp backend.env.example backend.env   # fill in the values the script tells you are still blank
 ./install.sh
+kubectl -n tender-bid get pods -w  # wait for backend and frontend to go Ready
 ```
 
 **If you ran `install.sh` above, you're done — skip to [Add reviewers](#add-reviewers).**
 Everything below is the manual equivalent of what it just did for you, useful for debugging
 or if you'd rather do it by hand:
-
-```bash
-# 1. Build + push the backend/frontend images (from the repo root — see install/k8s/README.md)
-# 2. Create the backend-env secret (backend.env, including DATABASE_URL — see below)
-# 3. Deploy
-cd ../..
-kubectl apply -k install/k8s
-kubectl -n tender-bid get pods -w   # wait for backend and frontend to go Ready
-```
 
 ### Alternative: docker compose (standalone / local dev)
 
