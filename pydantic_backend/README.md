@@ -30,13 +30,13 @@ persistence so neither is dropped.
 ## One-time setup
 
 ```bash
-python3 -m venv pydantic_backend/.venv
+uv venv pydantic_backend/.venv
 source pydantic_backend/.venv/bin/activate
-pip install -r pydantic_backend/requirements.txt
+uv pip install -r pydantic_backend/requirements.txt
 cp pydantic_backend/.env.example pydantic_backend/.env
-# edit pydantic_backend/.env: GMAIL_CLIENT_ID/SECRET, DATABASE_URL (URL-encode special
-# chars, e.g. @ -> %40), PARSER_BASE_URL, LITELLM_KEY_ENCRYPTION_KEY, LITELLM_WORKER_API_KEY,
-# REVIEWER_EMAIL
+### IMPORTANT: edit pydantic_backend/.env now and fill in GMAIL_CLIENT_ID/SECRET ###
+# also edit: DATABASE_URL (URL-encode special chars, e.g. @ -> %40), PARSER_BASE_URL,
+# LITELLM_KEY_ENCRYPTION_KEY, LITELLM_WORKER_API_KEY, REVIEWER_EMAIL
 ```
 
 Enable the Gmail API + Drive API in the Google Cloud project; the OAuth client must be a

@@ -33,7 +33,7 @@ gateway, builds both images, creates the namespace/secret, deploys, bootstraps t
 to re-run; it only fills in values that are still blank and never repeats the schema bootstrap.
 
 ```bash
-cd install/k8s
+cd ../../k8s
 cp backend.env.example backend.env   # first run only, if backend.env doesn't exist yet
 ./install.sh
 ```
@@ -237,19 +237,19 @@ around. It only needs to happen once; the resulting refresh token is reused (and
 self-refreshed) from then on.
 
 Do this on any machine with a browser — it doesn't have to be the cluster or wherever you ran
-`install.sh`, and doesn't need Docker/kubectl, just Python and the `gmail_client_id`/
-`gmail_client_secret` values from `backend.env`:
+`install.sh`, and doesn't need Docker/kubectl, just Python (via `uv`) and the
+`gmail_client_id`/`gmail_client_secret` values from `backend.env`:
 
 ```bash
-python3 -m venv pydantic_backend/.venv
+uv venv pydantic_backend/.venv
 source pydantic_backend/.venv/bin/activate
-pip install -r pydantic_backend/requirements.txt
+uv pip install -r pydantic_backend/requirements.txt
 
 cp pydantic_backend/.env.example pydantic_backend/.env
-# fill in GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET (same values as backend.env), plus
-# DATABASE_URL / LITELLM_KEY_ENCRYPTION_KEY / LITELLM_WORKER_API_KEY (also same values as
-# backend.env — gmail_auth.py doesn't use these, but pydantic-settings validates the
-# *entire* Settings model on construction, so they still have to be present)
+### IMPORTANT: edit pydantic_backend/.env now and fill in GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET ###
+# also fill in DATABASE_URL / LITELLM_KEY_ENCRYPTION_KEY / LITELLM_WORKER_API_KEY (same
+# values as backend.env — gmail_auth.py doesn't use these, but pydantic-settings validates
+# the *entire* Settings model on construction, so they still have to be present)
 
 python -m pydantic_backend.gmail_auth
 # opens a browser consent screen once — approve access, then this exits and prints

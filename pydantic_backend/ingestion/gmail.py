@@ -42,6 +42,16 @@ def _credentials(settings: Settings) -> Credentials:
     return credentials
 
 
+def is_authorized(settings: Settings) -> bool:
+    """Re-checks the token file on disk each call, so this reflects a token dropped into a
+    running pod (e.g. via `kubectl cp`) without needing a backend restart."""
+    try:
+        _credentials(settings)
+        return True
+    except RuntimeError:
+        return False
+
+
 def _headers(payload: dict[str, Any]) -> dict[str, str]:
     return {item['name'].lower(): item['value'] for item in payload.get('headers', [])}
 

@@ -222,3 +222,4 @@ export const deleteEmployee = (employeeId: string) =>
 export const reprocessPendingFiles = () => request<unknown[]>("/parsing/process-pending", { method: "POST" });
 
 export const pollGmail = () => request<unknown[]>("/ingestion/poll-gmail", { method: "POST" });
+export const getGmailStatus = () => request<{ authorized: boolean }>("/ingestion/gmail-status");

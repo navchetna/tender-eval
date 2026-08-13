@@ -17,6 +17,7 @@ import {
   deleteProject,
   getEmployees,
   getEvaluationsByProject,
+  getGmailStatus,
   getProjectFiles,
   getProjects,
   pollGmail,
@@ -204,6 +205,7 @@ export default function ProjectsPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [checkingGmail, setCheckingGmail] = useState(false);
+  const [gmailAuthorized, setGmailAuthorized] = useState<boolean | null>(null);
   const [parsing, setParsing] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -245,6 +247,16 @@ export default function ProjectsPage() {
       .catch(() => setEmployees([]));
   }, [user]);
 
+  useEffect(() => {
+    if (user?.role !== "ADMIN") return;
+    const checkStatus = () => getGmailStatus().then((s) => setGmailAuthorized(s.authorized)).catch(() => setGmailAuthorized(false));
+    checkStatus();
+    // Re-reads the token file on every backend call (see gmail_is_authorized), so this picks up a
+    // token authorized/copied in elsewhere (e.g. `install.sh`'s Gmail token sync) without a page reload.
+    const interval = setInterval(checkStatus, 15_000);
+    return () => clearInterval(interval);
+  }, [user]);
+
   const onAssigned = (projectId: string, employeeId: string) => {
     setSummaries((prev) =>
       prev?.map((s) => (s.project.project_id === projectId ? { ...s, project: { ...s.project, assigned_to: employeeId } } : s)) ?? prev
@@ -271,9 +283,11 @@ export default function ProjectsPage() {
     try {
       const results = await pollGmail();
       toast(results.length > 0 ? `Found ${results.length} new project email(s) — ingesting into Received` : "No new unread tender/bid emails found");
+      setGmailAuthorized(true);
       await load();
     } catch (err) {
       toast(err instanceof ApiError ? err.message : "Failed to check Gmail");
+      getGmailStatus().then((s) => setGmailAuthorized(s.authorized)).catch(() => setGmailAuthorized(false));
     } finally {
       setCheckingGmail(false);
     }
@@ -303,10 +317,13 @@ export default function ProjectsPage() {
         </div>
         {user?.role === "ADMIN" && (
           <div className="flex flex-wrap items-center gap-2">
+            {gmailAuthorized !== null && (
+              <Pill tone={gmailAuthorized ? "ok" : "bad"}>{gmailAuthorized ? "Gmail connected" : "Gmail not authorized"}</Pill>
+            )}
             <button
               onClick={onCheckGmail}
               disabled={checkingGmail}
-              className="btn flex items-center gap-[7px] rounded-[9px] border-[0.5px] border-line-strong bg-surface px-[14px] py-2 text-[13px] text-ink disabled:opacity-60"
+              className="btn flex min-w-[236px] items-center gap-[7px] rounded-[9px] border-[0.5px] border-line-strong bg-surface px-[14px] py-2 text-[13px] text-ink disabled:opacity-60"
             >
               <Mail size={15} />
               {checkingGmail ? "Checking…" : "Check Gmail for new tenders"}
@@ -314,7 +331,7 @@ export default function ProjectsPage() {
             <button
               onClick={onParsePending}
               disabled={parsing}
-              className="btn flex items-center gap-[7px] rounded-[9px] border-[0.5px] border-line-strong bg-surface px-[14px] py-2 text-[13px] text-ink disabled:opacity-60"
+              className="btn flex min-w-[206px] items-center gap-[7px] rounded-[9px] border-[0.5px] border-line-strong bg-surface px-[14px] py-2 text-[13px] text-ink disabled:opacity-60"
             >
               <RefreshCw size={15} />
               {parsing ? "Parsing…" : "Parse pending documents"}

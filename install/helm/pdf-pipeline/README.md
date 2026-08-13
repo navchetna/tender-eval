@@ -21,6 +21,29 @@ which only works on that one node.
   this is our own patched build (see `values.yaml`'s `image:` comment for
   why it isn't the upstream `ervin0307/pdf-pipeline:latest` image, and how
   to rebuild/republish it if the source changes).
+- The `pdf-pipeline-litellm` Secret must exist in the `pdf-pipeline` namespace
+  **before** you install — the Deployment reads `VLM_API_KEY` from it via
+  `vlmApiKeySecret`, and if it's missing the pod won't fail to schedule, it'll
+  crash-loop with `Error: secret "pdf-pipeline-litellm" not found` in
+  `kubectl describe pod`'s Events. Mint one and create the namespace + secret
+  first:
+
+  ```bash
+  kubectl create namespace pdf-pipeline
+  MASTER=$(kubectl get deploy -n genai-gateway genai-gateway-deployment \
+    -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="LITELLM_MASTER_KEY")].value}')
+  KEY=$(kubectl run litellm-mint-pdfpipeline --rm -i --restart=Never --quiet --image=curlimages/curl -- \
+    curl -s -X POST http://genai-gateway-service.genai-gateway.svc.cluster.local:4000/key/generate \
+      -H "Authorization: Bearer $MASTER" -H "Content-Type: application/json" \
+      -d '{"key_alias": "pdf-pipeline-vlm"}' | jq -r '.key')
+  kubectl create secret generic pdf-pipeline-litellm --namespace pdf-pipeline \
+    --from-literal=api-key="$KEY"
+  ```
+
+  (`--quiet` matters here — without it, `kubectl run --rm` appends its own
+  `pod "..." deleted` confirmation directly onto the container's stdout with
+  no newline, which `jq` then fails to parse: `parse error: Invalid numeric
+  literal...`.)
 
 ## Deploy
 

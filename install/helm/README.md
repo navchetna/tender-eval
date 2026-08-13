@@ -23,6 +23,13 @@ and gateway-registration pattern rather than duplicating them.
    `htop`).**
 3. **[`pdf-pipeline/`](pdf-pipeline)** — deploys the async docling
    parsing service, pointed at the LightOnOCR service from step 2.
+   **Before running this, create the `pdf-pipeline` namespace and its
+   `pdf-pipeline-litellm` Secret (`VLM_API_KEY`) first** — the Deployment
+   reads it via `vlmApiKeySecret`, and if it's missing the pod won't fail to
+   schedule, it'll crash-loop with `Error: secret "pdf-pipeline-litellm" not
+   found` in `kubectl describe pod`'s Events. See
+   [`pdf-pipeline/README.md`](pdf-pipeline/README.md#prerequisites) for the
+   commands to mint the key and create the secret.
 4. **Point tender-eval at it** — set `PARSER_BASE_URL` in `backend.env` (see
    [`../docker/backend.env.example`](../docker/backend.env.example)) to
    wherever `pdf-pipeline`'s Ingress/NodePort ends up (step 3's chart exposes
@@ -46,11 +53,24 @@ cd ..
 
 # 3. PDF pipeline
 cd pdf-pipeline
+kubectl create namespace pdf-pipeline
+# MASTER: the gateway's admin key, used only to mint KEY; KEY: a dedicated per-pipeline
+# gateway key, stored in the pdf-pipeline-litellm secret so the Deployment can authenticate its OCR calls.
+MASTER=$(kubectl get deploy -n genai-gateway genai-gateway-deployment \
+  -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="LITELLM_MASTER_KEY")].value}')
+KEY=$(kubectl run litellm-mint-pdfpipeline --rm -i --restart=Never --quiet --image=curlimages/curl -- \
+  curl -s -X POST http://genai-gateway-service.genai-gateway.svc.cluster.local:4000/key/generate \
+    -H "Authorization: Bearer $MASTER" -H "Content-Type: application/json" \
+    -d '{"key_alias": "pdf-pipeline-vlm"}' | jq -r '.key')
+kubectl create secret generic pdf-pipeline-litellm --namespace pdf-pipeline \
+  --from-literal=api-key="$KEY"
 helm upgrade --install pdf-pipeline . --namespace pdf-pipeline --create-namespace \
   --values values.yaml \
   --set ingress.host=<cluster_url>   # same host as LITELLM_BASE_URL
-cd ..
 ```
 
 See each chart's own README for prerequisites, verification steps, and why
 the pieces are split the way they are.
+
+Next: with the pipeline up, bring up tender-eval itself — see
+[`../k8s/README.md`](../k8s/README.md#quick-start-installsh).

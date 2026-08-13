@@ -7,7 +7,7 @@ namespaceOverride: pdf-pipeline
 image:
   repository: navchetna/pdf-pipeline
   tag: latest
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
 
 replicaCount: 1
 
@@ -34,7 +34,7 @@ vlmUrl: "http://genai-gateway-service.genai-gateway.svc.cluster.local:4000/v1/ch
 #
 #   MASTER=$(kubectl get deploy -n genai-gateway genai-gateway-deployment \
 #     -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="LITELLM_MASTER_KEY")].value}')
-#   KEY=$(kubectl run litellm-mint-pdfpipeline --rm -i --restart=Never --image=curlimages/curl -- \
+#   KEY=$(kubectl run litellm-mint-pdfpipeline --rm -i --restart=Never --quiet --image=curlimages/curl -- \
 #     curl -s -X POST http://genai-gateway-service.genai-gateway.svc.cluster.local:4000/key/generate \
 #       -H "Authorization: Bearer $MASTER" -H "Content-Type: application/json" \
 #       -d '{"key_alias": "pdf-pipeline-vlm"}' | jq -r '.key')
