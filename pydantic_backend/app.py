@@ -21,7 +21,7 @@ from .evaluation.service import process_pending as process_pending_evaluations
 from .evaluation.service import resend_notification
 from .evaluation.service import retry_file as retry_evaluation_file
 from .ingestion import drive
-from .ingestion.gmail import fetch_unread_pdf_emails
+from .ingestion.gmail import fetch_unread_pdf_emails, is_authorized as gmail_is_authorized
 from .ingestion.pipeline import AlreadyIngestedError, persist_gmail_email
 from .ingestion.models import FileType, FileTypeUpdate, IncomingEmail, Project, ProjectFileRecord, ProjectIn, StoredFile
 from .ingestion.postgres import PostgresRepository
@@ -125,6 +125,13 @@ async def setup_database() -> dict[str, str]:
         password_hash = bcrypt.hashpw(admin_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         await repository.ensure_admin(settings.admin_email, password_hash)
     return {'status': 'initialized'}
+
+
+@app.get('/ingestion/gmail-status')
+async def gmail_status(_admin: CurrentUser = Depends(require_admin)) -> dict[str, bool]:
+    """Whether a valid Gmail token is present, re-read from disk on every call — so this
+    flips to `true` immediately after a token is copied into the running pod, no restart needed."""
+    return {'authorized': gmail_is_authorized(get_settings())}
 
 
 @app.post('/ingestion/poll-gmail')
