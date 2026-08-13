@@ -220,7 +220,7 @@ schema (once), and verifies. It's idempotent — safe to re-run any time you cha
 `backend.env` or the app's code, not just on first setup:
 
 ```bash
-cd install/k8s
+cd ../k8s
 cp backend.env.example backend.env   # fill in the values the script tells you are still blank
 ./install.sh
 ```
