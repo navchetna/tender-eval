@@ -61,7 +61,11 @@ MASTER=$(kubectl get deploy -n genai-gateway genai-gateway-deployment \
 KEY=$(kubectl run litellm-mint-pdfpipeline --rm -i --restart=Never --quiet --image=curlimages/curl -- \
   curl -s -X POST http://genai-gateway-service.genai-gateway.svc.cluster.local:4000/key/generate \
     -H "Authorization: Bearer $MASTER" -H "Content-Type: application/json" \
-    -d '{"key_alias": "pdf-pipeline-vlm"}' | jq -r '.key')
+    -d "{\"key_alias\": \"pdf-pipeline-vlm-$(date +%s)\"}" | jq -r '.key')
+# LiteLLM enforces unique key_alias values, so a fixed alias fails with a 400 on every retry
+# after the first successful mint — hence the timestamp suffix above. jq -r '.key' on that
+# error response silently becomes the literal string "null", so verify before using it:
+echo "$KEY" | grep -qE '^sk-' || { echo "Mint failed — got: $KEY" >&2; exit 1; }
 kubectl create secret generic pdf-pipeline-litellm --namespace pdf-pipeline \
   --from-literal=api-key="$KEY"
 helm upgrade --install pdf-pipeline . --namespace pdf-pipeline --create-namespace \

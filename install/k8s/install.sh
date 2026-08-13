@@ -126,18 +126,23 @@ fi
 # --- 4. Mint ADMIN_LITELLM_KEY / LITELLM_WORKER_API_KEY from the gateway ----------------
 mint_litellm_key() {
   local alias="$1"
-  local master
+  local master key
   master="$(kubectl get deploy -n "$GATEWAY_NS" genai-gateway-deployment \
     -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="LITELLM_MASTER_KEY")].value}')"
   [ -n "$master" ] || die "Could not read LITELLM_MASTER_KEY from genai-gateway-deployment."
 
-  kubectl run "litellm-mint-${alias}-$$" -n "$GATEWAY_NS" --rm -i --restart=Never --quiet \
+  # key_alias must be unique across ALL keys on the gateway (LiteLLM rejects a repeat with a
+  # 400), so a fixed alias would fail on every re-run after the first successful mint — the
+  # $$-suffixed pod name above doesn't help with that, it's the alias itself that must vary.
+  key="$(kubectl run "litellm-mint-${alias}-$$" -n "$GATEWAY_NS" --rm -i --restart=Never --quiet \
     --image=curlimages/curl -- \
     curl -s -X POST "$GATEWAY_SVC_URL/key/generate" \
       -H "Authorization: Bearer $master" \
       -H "Content-Type: application/json" \
-      -d "{\"key_alias\": \"tender-eval-${alias}\"}" \
-    | jq -r '.key'
+      -d "{\"key_alias\": \"tender-eval-${alias}-$(date +%s)\"}" \
+    | jq -r '.key')"
+  echo "$key" | grep -qE '^sk-' || die "Failed to mint the ${alias} LiteLLM key (got: ${key}) — re-run the script to retry."
+  echo "$key"
 }
 
 if [ -z "$(get_env ADMIN_LITELLM_KEY)" ]; then

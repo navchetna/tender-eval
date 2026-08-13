@@ -35,7 +35,8 @@ which only works on that one node.
   KEY=$(kubectl run litellm-mint-pdfpipeline --rm -i --restart=Never --quiet --image=curlimages/curl -- \
     curl -s -X POST http://genai-gateway-service.genai-gateway.svc.cluster.local:4000/key/generate \
       -H "Authorization: Bearer $MASTER" -H "Content-Type: application/json" \
-      -d '{"key_alias": "pdf-pipeline-vlm"}' | jq -r '.key')
+      -d "{\"key_alias\": \"pdf-pipeline-vlm-$(date +%s)\"}" | jq -r '.key')
+  echo "$KEY" | grep -qE '^sk-' || { echo "Mint failed — got: $KEY" >&2; exit 1; }
   kubectl create secret generic pdf-pipeline-litellm --namespace pdf-pipeline \
     --from-literal=api-key="$KEY"
   ```
@@ -43,7 +44,12 @@ which only works on that one node.
   (`--quiet` matters here — without it, `kubectl run --rm` appends its own
   `pod "..." deleted` confirmation directly onto the container's stdout with
   no newline, which `jq` then fails to parse: `parse error: Invalid numeric
-  literal...`.)
+  literal...`. The `$(date +%s)` suffix matters too — LiteLLM enforces unique
+  `key_alias` values across all keys, so a fixed alias fails with `400 "Key
+  with alias ... already exists"` on every retry after the first successful
+  mint, and `jq -r '.key'` on that error object silently becomes the literal
+  string `null`. The `grep` check catches that instead of writing a broken
+  key into the secret.)
 
 ## Deploy
 
