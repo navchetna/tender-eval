@@ -1,0 +1,9 @@
+# Copy this file to .env in this same directory (docker compose auto-loads a file literally
+# named .env next to the compose file, for ${...} substitution in docker-compose.yaml — this
+# is a different mechanism from backend.env's `env_file:`, which only the backend container
+# reads). Never commit the real .env — it's covered by the repo's root .gitignore already
+# (plain ".env" and ".env.*" patterns match at any depth).
+
+POSTGRES_USER=tender
+POSTGRES_PASSWORD=replace-me
+POSTGRES_DB=tender
