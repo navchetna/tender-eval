@@ -363,6 +363,24 @@ class PostgresRepository:
                 row = await cursor.fetchone()
                 return (row['current_version'] + 1) if row else 1
 
+    async def get_version_context(self, project_code: str) -> dict | None:
+        """Project + current version's Drive folder info, for bid-only emails joining an existing round."""
+        async with pool_connection(self.settings) as connection:
+            async with connection.cursor() as cursor:
+                await cursor.execute(
+                    '''
+                    SELECT p.project_id, p.project_name, p.current_version, p.drive_folder_id,
+                           f.drive_folder_id AS version_folder_id, f.version_folder_name
+                    FROM projects p
+                    LEFT JOIN file_repository f ON f.project_id = p.project_id
+                        AND f.version = p.current_version AND f.drive_folder_id IS NOT NULL
+                    WHERE p.project_code = %s AND p.current_version > 0
+                    LIMIT 1
+                    ''',
+                    (project_code,),
+                )
+                return await cursor.fetchone()
+
     async def is_already_ingested(self, message_id: str) -> bool:
         """Return True if this Gmail message has already been fully ingested."""
         async with pool_connection(self.settings) as connection:
@@ -409,8 +427,11 @@ class PostgresRepository:
                 if project:
                     project_id = str(project['project_id'])
                     name = project['project_name']
+                    # COALESCE: joining an existing version carries no project folder id, and
+                    # that must not wipe one already stored.
                     await cursor.execute(
-                        'UPDATE projects SET current_version = %s, drive_folder_id = %s, updated_at = now() WHERE project_id = %s',
+                        'UPDATE projects SET current_version = %s, '
+                        'drive_folder_id = COALESCE(%s, drive_folder_id), updated_at = now() WHERE project_id = %s',
                         (version, drive_ctx.project_folder_id, project_id),
                     )
                 else:

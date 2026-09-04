@@ -44,28 +44,46 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # LightOnOCR-2-1B on the Intel GPU. /dev/dxg + the /usr/lib/wsl mount are WSL2's
+  # GPU-passthrough plumbing, which Docker Desktop's VM exposes to containers.
+  llama-server:
+    image: ghcr.io/ggml-org/llama.cpp:server-intel
+    environment:
+      ZES_ENABLE_SYSMAN: "1"
+    devices:
+      - /dev/dxg
+    volumes:
+      - ../../../models:/models:ro
+      - /usr/lib/wsl:/usr/lib/wsl
+    command: >
+      -m /models/lightonocr-bbox/LightOnOCR-2-1B-bbox-Q4_K_M.gguf
+      --mmproj /models/lightonocr-bbox/mmproj-BF16.gguf
+      -ngl 99 -np 4 -c 65536 -b 8192 -ub 2048 -fa on
+      --mtmd-batch-max-tokens 2048
+      --host 0.0.0.0 --port 8080
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
   litellm:
     image: ghcr.io/berriai/litellm:main-latest
     env_file:
       - ./litellm.env
     environment:
-      # LiteLLM's own Postgres-backed store (virtual keys, spend tracking, /ui login) — a
-      # dedicated database in the bundled `postgres` service, separate from the app's tables.
-      # host network mode (below) means "postgres" isn't resolvable via compose DNS here —
-      # localhost:5432 works because postgres already publishes that port to the host.
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/litellm
+      # On bridge networking, the `postgres` service is resolvable via compose DNS.
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/litellm
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./litellm-config.yaml:/app/config.yaml:ro
     command: ["--config", "/app/config.yaml", "--port", "4000"]
-    # npu-qwen3 (OVMS) runs on the Windows side of this WSL2 box, only reachable from WSL via
-    # its localhost-relay — which host.docker.internal / the Docker bridge gateway does NOT
-    # cover (that resolves to the WSL VM itself, a separate network hop the relay doesn't
-    # extend into). Host networking puts this container in the exact same network namespace as
-    # the WSL shell, so its own localhost:8000 hits that same working relay directly.
-    network_mode: host
+    ports:
+      - "4000:4000"
     depends_on:
       postgres:
         condition: service_healthy
+      llama-server:
+        condition: service_started
     restart: unless-stopped
 
   backend:
@@ -80,6 +98,8 @@ services:
       # Postgres instead just means: delete the postgres service above and set DATABASE_URL
       # directly in backend.env instead.
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # Lets npu_run.bat / groq_run.bat pick the fast tier without editing backend.env.
+      LITELLM_FAST_MODEL: ${LITELLM_FAST_MODEL:-npu-qwen3-4b}
     volumes:
       # Gmail/Drive OAuth refresh token — written and refreshed by the app at runtime, so this
       # must be read-write, not read-only. Matches GMAIL_TOKEN_PATH's default of

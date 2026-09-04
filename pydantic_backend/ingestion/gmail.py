@@ -12,6 +12,7 @@ from googleapiclient.discovery import build
 
 from ..config import Settings
 from .models import Attachment, IncomingEmail
+from .subject import has_valid_subject
 
 GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly'
 GMAIL_SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send'
@@ -72,6 +73,10 @@ def fetch_unread_pdf_emails(settings: Settings, max_results: int = 20) -> list[I
     for item in listed.get('messages', []):
         message = service.users().messages().get(userId='me', id=item['id'], format='full').execute()
         payload = message['payload']
+        headers = _headers(payload)
+        subject = headers.get('subject', '')
+        if not has_valid_subject(subject):
+            continue
         attachments: list[Attachment] = []
         for part in _pdf_parts([payload]):
             attachment_id = part.get('body', {}).get('attachmentId')
@@ -80,8 +85,7 @@ def fetch_unread_pdf_emails(settings: Settings, max_results: int = 20) -> list[I
             data = service.users().messages().attachments().get(userId='me', messageId=message['id'], id=attachment_id).execute()['data']
             attachments.append(Attachment(file_name=part['filename'], mime_type=part['mimeType'], content=base64.urlsafe_b64decode(data + '=' * (-len(data) % 4))))
         if attachments:
-            headers = _headers(payload)
-            emails.append(IncomingEmail(message_id=message['id'], subject=headers.get('subject', ''), sender=headers.get('from', ''), received_at=datetime.fromtimestamp(int(message['internalDate']) / 1000, tz=timezone.utc), attachments=attachments))
+            emails.append(IncomingEmail(message_id=message['id'], subject=subject, sender=headers.get('from', ''), received_at=datetime.fromtimestamp(int(message['internalDate']) / 1000, tz=timezone.utc), attachments=attachments))
     return emails
 
 

@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     gmail_client_id: str
     gmail_client_secret: SecretStr
     gmail_token_path: Path = Path('.secrets/gmail-token.json')
+    drive_parent_folder_id: str = '153OSg8o20lRxEU4sYpipZgochPXj50yL'
     gmail_query: str = 'is:unread has:attachment filename:pdf'
     database_url: SecretStr
     logfire_send: bool = False
@@ -29,6 +30,11 @@ class Settings(BaseSettings):
     parse_worker_interval_seconds: float = 30.0
     parse_batch_size: int = 5
     parse_max_attempts: int = 3
+    # A file is only left in PARSING while a worker actively polls the parser for it. If the
+    # backend restarts mid-parse nothing resumes that poll, so the row would sit PARSING
+    # forever. Anything older than this is treated as orphaned and re-claimed. Must exceed the
+    # longest legitimate parse (parse_poll_interval_seconds * parse_max_poll_attempts = 600s).
+    parse_stale_after_seconds: float = 900.0
 
     # --- Tender/bid evaluation (stage 3): local LiteLLM proxy, fronting NPU-served Qwen3
     # (fast: extraction/matching/drafting) and Claude (quality: judgment/scoring/comparison) ---
@@ -45,7 +51,7 @@ class Settings(BaseSettings):
     admin_password: SecretStr = SecretStr('')
 
     # --- CORS (stage 5): browser origins allowed to call this API directly ---
-    cors_origins: list[str] = ['http://localhost:3000']
+    cors_origins: list[str] = ['http://localhost:3000', 'http://localhost:3002']
 
 
 @lru_cache

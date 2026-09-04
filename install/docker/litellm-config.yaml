@@ -5,22 +5,38 @@
 # model_list are reloaded from the file on every restart and can't be edited/deleted from the UI
 # (a LiteLLM limitation) — by design for these two, but why claude-eval isn't listed here.
 #
-# `litellm` runs with network_mode: host (docker-compose.yaml), so both entries below use
-# localhost — for npu-qwen3 that's specifically so it reaches the Windows-hosted OVMS instance
-# via WSL2's own localhost relay (host.docker.internal only reaches the WSL VM itself, a hop
-# short of Windows). lightonocr's llama-server is WSL-native, so localhost reaches it directly
-# either way.
+# `litellm` runs on the compose bridge network with extra_hosts host.docker.internal:host-gateway
+# (docker-compose.yaml). So: npu-qwen3-4b reaches the Windows-native OVMS process via
+# host.docker.internal:8000, while lightonocr-1b reaches its sibling container directly by
+# service name. A "Connection error" on npu-qwen3-4b almost always means the OVMS process is
+# simply not running on the host — start it with install/docker/npu_run.bat.
 model_list:
   - model_name: npu-qwen3-4b
     litellm_params:
       model: openai/ervin0307/Qwen3-4B-Instruct-2507-int4-ov
-      api_base: http://localhost:8000/v3
+      api_base: http://host.docker.internal:8000/v3
       api_key: "not-needed"
   - model_name: lightonocr-1b
     litellm_params:
       model: openai/lightonai/LightOnOCR-2-1B
-      api_base: http://localhost:8080/v1
+      api_base: http://llama-server:8080/v1
       api_key: "not-needed"
+  - model_name: groq-gpt-oss-120b
+    litellm_params:
+      model: groq/openai/gpt-oss-120b
+      api_key: os.environ/GROQ_API_KEY
+
+# Failsafe: if the NPU-served model is down (OVMS not started, model still compiling, device
+# busy), route the request to the cloud model instead of surfacing a 500 that would strand a
+# document at the detecting stage. Detection/normalization callers see a normal success.
+router_settings:
+  fallbacks:
+    - npu-qwen3-4b: ["groq-gpt-oss-120b"]
+  # Stop hammering a dead local endpoint: after 2 failures it is parked for 60s and every
+  # request goes straight to the fallback, then it is retried automatically.
+  allowed_fails: 2
+  cooldown_time: 60
+  num_retries: 2
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY

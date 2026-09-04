@@ -10,6 +10,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ProjectStageTrack } from "@/components/ProjectStageTrack";
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/components/ToastProvider";
+import { describeIngest, useGmailWatch } from "@/lib/gmailWatchContext";
 import {
   ApiError,
   assignProject,
@@ -201,6 +202,7 @@ function AssignSelect({
 export default function ProjectsPage() {
   const { user } = useAuth();
   const toast = useToast();
+  const { ingestSignal } = useGmailWatch();
   const [summaries, setSummaries] = useState<ProjectSummary[] | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -239,6 +241,13 @@ export default function ProjectsPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, []);
+
+  // The background Gmail watcher ingested new documents, so the cards below are now stale.
+  useEffect(() => {
+    if (ingestSignal === 0) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load();
+  }, [ingestSignal]);
 
   useEffect(() => {
     if (user?.role !== "ADMIN") return;
@@ -282,7 +291,12 @@ export default function ProjectsPage() {
     setCheckingGmail(true);
     try {
       const results = await pollGmail();
-      toast(results.length > 0 ? `Found ${results.length} new project email(s) — ingesting into Received` : "No new unread tender/bid emails found");
+      toast(
+        results.length > 0
+          ? describeIngest(results)
+          : "No valid unread submissions found. Required subject: CODE: PROJECT NAME",
+        results.length > 0 ? { variant: "info", duration: 5000 } : undefined
+      );
       setGmailAuthorized(true);
       await load();
     } catch (err) {
@@ -316,6 +330,9 @@ export default function ProjectsPage() {
           </p>
           {user?.role === "ADMIN" && (
             <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+              <span className="text-[11px] font-medium text-ink-soft">
+                EMAIL SUBJECT: <code className="font-mono text-ink">CODE: PROJECT NAME</code>
+              </span>
               <div className="flex items-center gap-[6px]">
                 <div className="flex min-w-[76px] justify-center">
                   <Pill tone={gmailAuthorized === null ? "none" : gmailAuthorized ? "ok" : "bad"}>

@@ -19,8 +19,8 @@ class ParsingRepository:
         Atomically claim up to `limit` files that are ready to parse and mark them PARSING.
 
         Uses FOR UPDATE SKIP LOCKED so multiple workers can run concurrently without
-        picking the same rows. Only RECEIVED (or retryable PARSE_FAILED under the attempt
-        cap) files with a Drive file id are eligible.
+        picking the same rows. Eligible: RECEIVED, retryable PARSE_FAILED, or a file left
+        stranded in PARSING by a restart (see `parse_stale_after_seconds`).
         """
         async with pool_connection(self.settings) as connection:
             async with connection.cursor() as cursor:
@@ -34,8 +34,22 @@ class ParsingRepository:
                           AND (
                                 processing_status = 'RECEIVED'
                                 OR (processing_status = 'PARSE_FAILED' AND parse_attempts < %s)
+                                -- Orphaned by a backend restart/crash: the worker that was
+                                -- polling the parser for this file is gone, so nothing will
+                                -- ever move it out of PARSING on its own.
+                                OR (
+                                    processing_status = 'PARSING'
+                                    AND parse_attempts < %s
+                                    AND parse_submitted_at < now() - make_interval(secs => %s)
+                                )
                           )
-                        ORDER BY created_at
+                        ORDER BY
+                            CASE processing_status
+                                WHEN 'RECEIVED' THEN 0
+                                WHEN 'PARSING' THEN 1
+                                ELSE 2
+                            END,
+                            created_at
                         FOR UPDATE SKIP LOCKED
                         LIMIT %s
                     )
@@ -49,7 +63,12 @@ class ParsingRepository:
                     RETURNING f.file_id, f.file_name, f.drive_file_id, f.mime_type,
                               f.drive_folder_id AS version_folder_id, f.parse_attempts, f.file_type
                     ''',
-                    (self.settings.parse_max_attempts, limit),
+                    (
+                        self.settings.parse_max_attempts,
+                        self.settings.parse_max_attempts,
+                        self.settings.parse_stale_after_seconds,
+                        limit,
+                    ),
                 )
                 rows = await cursor.fetchall()
             await connection.commit()

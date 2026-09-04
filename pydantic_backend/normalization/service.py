@@ -77,7 +77,7 @@ async def build_view(
     topic: Topic,
 ) -> NormalizedView:
     """`creds` is used for row/header alignment (match_rows/match_headers)."""
-    tender_records = await tender_repository.list_by_project_version(project_id, version)
+    tender_records = await tender_repository.list_by_project_version_with_fallback(project_id, version)
     if not tender_records:
         raise ValueError('No tender evaluation found for this project/version')
     tender_record = tender_records[0]

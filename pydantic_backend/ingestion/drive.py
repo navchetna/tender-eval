@@ -20,7 +20,6 @@ DRIVE_SCOPES = [
     'https://www.googleapis.com/auth/drive',
 ]
 
-PARENT_FOLDER_ID = '153OSg8o20lRxEU4sYpipZgochPXj50yL'
 
 
 def _credentials(settings: Settings) -> Credentials:
@@ -74,7 +73,7 @@ def ensure_project_folder(
     # --- find or create project root folder ---
     q = (
         f"name = '{proj_folder_name}' "
-        f"and '{PARENT_FOLDER_ID}' in parents "
+        f"and '{settings.drive_parent_folder_id}' in parents "
         f"and mimeType = 'application/vnd.google-apps.folder' "
         f"and trashed = false"
     )
@@ -87,7 +86,7 @@ def ensure_project_folder(
         meta = {
             'name': proj_folder_name,
             'mimeType': 'application/vnd.google-apps.folder',
-            'parents': [PARENT_FOLDER_ID],
+            'parents': [settings.drive_parent_folder_id],
         }
         project_folder_id = service.files().create(body=meta, fields='id').execute()['id']
 

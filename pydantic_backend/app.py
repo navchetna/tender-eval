@@ -55,6 +55,7 @@ app.add_middleware(
 
 _worker_stop: asyncio.Event | None = None
 _worker_task: asyncio.Task | None = None
+_worker_wake: asyncio.Event | None = None
 
 
 @app.on_event('startup')
@@ -64,17 +65,20 @@ async def _start_pool() -> None:
 
 @app.on_event('startup')
 async def _start_worker() -> None:
-    global _worker_stop, _worker_task
+    global _worker_stop, _worker_task, _worker_wake
     settings = get_settings()
     if settings.parse_worker_enabled:
         _worker_stop = asyncio.Event()
-        _worker_task = asyncio.create_task(run_worker(settings, _worker_stop))
+        _worker_wake = asyncio.Event()
+        _worker_task = asyncio.create_task(run_worker(settings, _worker_stop, _worker_wake))
 
 
 @app.on_event('shutdown')
 async def _stop_worker() -> None:
     if _worker_stop is not None:
         _worker_stop.set()
+    if _worker_wake is not None:
+        _worker_wake.set()
     if _worker_task is not None:
         await _worker_task
 
@@ -141,16 +145,26 @@ async def poll_gmail(max_results: int = 20, _admin: CurrentUser = Depends(requir
         settings = get_settings()
         repository = PostgresRepository(settings)
         emails = fetch_unread_pdf_emails(settings, max_results=max_results)
-        results = []
-        for email in emails:
-            try:
-                result = await persist_gmail_email(email, repository, settings)
-                results.append(result.model_dump())
-            except AlreadyIngestedError:
-                pass  # same email re-fetched because it's still unread — skip silently
-        return results
     except (RuntimeError, ValueError) as exc:
+        # Only a failure to reach Gmail at all is fatal — nothing was ingested.
         raise HTTPException(422, str(exc)) from exc
+
+    results = []
+    for email in emails:
+        try:
+            result = await persist_gmail_email(email, repository, settings)
+            results.append(result.model_dump())
+            if _worker_wake is not None:
+                _worker_wake.set()
+        except AlreadyIngestedError:
+            pass  # same email re-fetched because it's still unread — skip silently
+        except Exception:  # noqa: BLE001 — one bad email must not block the rest of the inbox
+            # e.g. a subject that isn't `<Code>: <Name>`, or a Drive hiccup. Previously this
+            # escaped the loop and 422'd the whole poll, so a single unusable message stalled
+            # ingestion for every other email indefinitely. It stays unread, so a later poll
+            # retries it once the cause is fixed.
+            logfire.exception('ingestion: skipped unusable email', message_id=email.message_id, subject=email.subject)
+    return results
 
 
 @app.post('/parsing/process-pending')
@@ -257,7 +271,7 @@ async def evaluation_tender_list_by_project(
 ) -> list[EvaluationRecord]:
     """All tender evaluations (normally 0 or 1) for a project/version, regardless of review status."""
     await _ensure_project_access(project_id, user)
-    return await tender_repository(get_settings()).list_by_project_version(project_id, version)
+    return await tender_repository(get_settings()).list_by_project_version_with_fallback(project_id, version)
 
 
 @app.get('/evaluation/tender/{evaluation_id}')

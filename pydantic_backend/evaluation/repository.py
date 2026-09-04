@@ -249,6 +249,28 @@ class EvaluationRepository:
                 rows = await cursor.fetchall()
         return [_to_record(row) for row in rows]
 
+    async def list_by_project_version_with_fallback(self, project_id: str, version: int) -> list[EvaluationRecord]:
+        """Like list_by_project_version, but for tenders falls back to the most recent
+        evaluation from an earlier version when the requested version has none."""
+        records = await self.list_by_project_version(project_id, version)
+        if records or self.doc_type != DocType.tender:
+            return records
+        async with pool_connection(self.settings) as connection:
+            async with connection.cursor() as cursor:
+                await cursor.execute(
+                    f'''
+                    SELECT e.*, f.file_name
+                    FROM {self._table} e
+                    JOIN file_repository f ON f.file_id = e.file_id
+                    WHERE e.project_id = %s AND e.version < %s
+                    ORDER BY e.version DESC
+                    LIMIT 1
+                    ''',
+                    (project_id, version),
+                )
+                rows = await cursor.fetchall()
+        return [_to_record(row) for row in rows]
+
     async def approve(self, evaluation_id: str, topic: Topic, employee_id: str) -> None:
         column_prefix = topic.value
         async with pool_connection(self.settings) as connection:

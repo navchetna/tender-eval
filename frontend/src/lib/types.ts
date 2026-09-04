@@ -66,6 +66,34 @@ export interface ProjectFileRecord {
   updated_at: string;
 }
 
+// --- Gmail ingestion (POST /ingestion/poll-gmail) -------------------------
+// Mirrors ingestion/models.py. One IngestionResult per *newly* ingested email;
+// already-ingested ones are dropped server-side (AlreadyIngestedError), so a
+// non-empty array always means genuinely new documents.
+
+export interface StoredFile {
+  file_id: string;
+  file_name: string;
+  file_type: FileType;
+  processing_status: string;
+  drive_file_id: string | null;
+  drive_web_link: string | null;
+}
+
+export interface IngestionProjectContext {
+  project_id: string;
+  project_code: string;
+  project_name: string;
+  version: number;
+  email_message_id: string;
+}
+
+export interface IngestionResult {
+  context: IngestionProjectContext;
+  files: StoredFile[];
+  stages: { stage: string; status: string; detail: string | null }[];
+}
+
 export type Topic = "technical" | "price";
 export type ReviewStatus = "SUGGESTED" | "APPROVED";
 

@@ -69,7 +69,11 @@ class ProjectContext(BaseModel):
 
 
 class DriveContext(BaseModel):
-    project_folder_id: str
+    # Optional because a bid email can join a version whose project row has no
+    # drive_folder_id: console-created projects start with it NULL, and the UI upload path
+    # only records the *version* folder on file_repository. The version folder is what
+    # uploads actually need; the project folder id is metadata.
+    project_folder_id: str | None = None
     version_folder_id: str
     version_folder_name: str
 

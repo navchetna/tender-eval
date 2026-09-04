@@ -1,25 +1,16 @@
-import re
 from pathlib import PurePosixPath
 
 import logfire
 
 from ..config import Settings
 from .drive import ensure_project_folder, upload_attachment
-from .models import Attachment, DriveContext, IncomingEmail, IngestionResult, ProjectSubject, StageResult
+from .models import Attachment, DriveContext, IncomingEmail, IngestionResult, StageResult
 from .postgres import PostgresRepository
-
-SUBJECT_PATTERN = re.compile(r'^\s*(?P<code>[A-Za-z0-9][A-Za-z0-9_-]*)\s*:\s*(?P<name>.+?)\s*$')
+from .subject import parse_subject
 
 
 class AlreadyIngestedError(Exception):
     pass
-
-
-def parse_subject(subject: str) -> ProjectSubject:
-    match = SUBJECT_PATTERN.match(subject)
-    if not match:
-        raise ValueError('Malformed subject; expected `<Project Code>: <Project Name>`')
-    return ProjectSubject(project_code=match.group('code'), project_name=match.group('name'))
 
 
 def _dedupe_attachment_names(attachments: list[Attachment]) -> list[Attachment]:
@@ -66,25 +57,42 @@ async def persist_gmail_email(
         project = parse_subject(email.subject)
         stages.append(StageResult(stage='02_parse_subject', status='completed', detail=project.project_code))
 
+    # Bid-only emails for an existing project join the current version rather than
+    # starting a new round — the tender document is shared across all bids.
+    has_tender = any('tender' in a.file_name.lower() for a in email.attachments)
+    existing_ctx = None if has_tender else await repository.get_version_context(project.project_code)
+    join_existing = existing_ctx is not None and existing_ctx['version_folder_id'] is not None
+
     with logfire.span('ingestion.03.resolve_version', project_code=project.project_code):
-        version = await repository.next_version(project.project_code)
-        stages.append(StageResult(stage='03_resolve_version', status='completed', detail=f'version {version:03d}'))
+        if join_existing:
+            version = existing_ctx['current_version']
+            stages.append(StageResult(stage='03_resolve_version', status='completed', detail=f'version {version:03d} (joining existing)'))
+        else:
+            version = await repository.next_version(project.project_code)
+            stages.append(StageResult(stage='03_resolve_version', status='completed', detail=f'version {version:03d}'))
 
     with logfire.span('ingestion.04.drive_folders', project_code=project.project_code, version=version):
-        project_folder_id, version_folder_id, version_folder_name = ensure_project_folder(
-            settings, project.project_code, project.project_name, version, email.received_at
-        )
-        drive_ctx = DriveContext(
-            project_folder_id=project_folder_id,
-            version_folder_id=version_folder_id,
-            version_folder_name=version_folder_name,
-        )
-        stages.append(StageResult(stage='04_drive_folders', status='completed', detail=f'folder {version_folder_id}'))
+        if join_existing:
+            drive_ctx = DriveContext(
+                project_folder_id=existing_ctx['drive_folder_id'],
+                version_folder_id=existing_ctx['version_folder_id'],
+                version_folder_name=existing_ctx['version_folder_name'] or '',
+            )
+        else:
+            project_folder_id, version_folder_id, version_folder_name = ensure_project_folder(
+                settings, project.project_code, project.project_name, version, email.received_at
+            )
+            drive_ctx = DriveContext(
+                project_folder_id=project_folder_id,
+                version_folder_id=version_folder_id,
+                version_folder_name=version_folder_name,
+            )
+        stages.append(StageResult(stage='04_drive_folders', status='completed', detail=f'folder {drive_ctx.version_folder_id}'))
 
     with logfire.span('ingestion.05.drive_upload', project_code=project.project_code):
         drive_files: dict[str, tuple[str, str]] = {}
         for attachment in email.attachments:
-            file_id, web_link = upload_attachment(settings, attachment, version_folder_id)
+            file_id, web_link = upload_attachment(settings, attachment, drive_ctx.version_folder_id)
             drive_files[attachment.file_name] = (file_id, web_link)
         stages.append(StageResult(stage='05_drive_upload', status='completed', detail=f'{len(drive_files)} PDF(s) uploaded'))
 
