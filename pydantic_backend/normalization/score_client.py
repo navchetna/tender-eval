@@ -14,11 +14,37 @@ clauses) needs enough budget that the reasoning doesn't crowd out the actual ans
 """
 from __future__ import annotations
 
+from difflib import SequenceMatcher
+
 from pydantic import BaseModel
 
 from ..llm_agent import structured_agent
 from ..llm_credentials import LlmCredentials
 from .models import BidScore, NormalizedView, SectionScoreResult
+
+
+def canonical_merchant(name: str, merchants: list[str]) -> str | None:
+    """
+    Map a model-returned merchant name back to its canonical label (the file-name stem, e.g.
+    'QuickKart-merchant-self-certification'). Models routinely shorten those labels to just the
+    business name ('QuickKart'), and a strict equality check then silently drops every score or
+    assessment — an empty result that looks exactly like the model having answered nothing.
+    Returns None if the name resembles no known merchant (an invented one).
+    """
+    if name in merchants:
+        return name
+    lowered = name.strip().lower()
+    if not lowered:
+        return None
+    for merchant in merchants:
+        if lowered in merchant.lower() or merchant.lower() in lowered:
+            return merchant
+    best, best_ratio = None, 0.0
+    for merchant in merchants:
+        ratio = SequenceMatcher(None, lowered, merchant.lower()).ratio()
+        if ratio > best_ratio:
+            best, best_ratio = merchant, ratio
+    return best if best_ratio >= 0.6 else None
 
 DEFAULT_SYSTEM_PROMPT = (
     'You are an NPCI compliance assessor. You are given the regulator\'s checklist clauses for '
@@ -77,7 +103,14 @@ async def score_section(
     agent = structured_agent(creds, _ScoreResponse, system_prompt or DEFAULT_SYSTEM_PROMPT, max_tokens=4096, reasoning_effort='low')
     result = await agent.run(prompt)
 
-    scores = [s for s in result.output.scores if s.bidder in bidders]
+    scores: list[BidScore] = []
+    seen: set[str] = set()
+    for s in result.output.scores:
+        label = canonical_merchant(s.bidder, bidders)
+        if label is None or label in seen:
+            continue
+        seen.add(label)
+        scores.append(s.model_copy(update={'bidder': label}))
     return SectionScoreResult(
         project_id=view.project_id, version=view.version, topic=view.topic,
         scores=scores, comparison=result.output.comparison,

@@ -18,7 +18,7 @@ from pydantic import BaseModel
 from ..llm_agent import structured_agent
 from ..llm_credentials import LlmCredentials
 from .models import MerchantAssessment, NormalizedView, RiskTriageResult
-from .score_client import flatten_view
+from .score_client import canonical_merchant, flatten_view
 
 DEFAULT_SYSTEM_PROMPT = (
     'You are an NPCI supervisory analyst performing risk triage across merchants\' compliance '
@@ -79,24 +79,36 @@ async def triage_merchants(
             audit_priority_order=[], summary='No approved merchant submissions to triage yet.',
         )
 
-    prompt = '\n\n'.join(sections)
+    merchant_list = '\n'.join(f'- {m}' for m in merchants)
+    prompt = f'MERCHANTS (assess each one, using these exact names):\n{merchant_list}\n\n' + '\n\n'.join(sections)
     agent = structured_agent(creds, _TriageResponse, system_prompt or DEFAULT_SYSTEM_PROMPT, max_tokens=4096, reasoning_effort='low')
     result = await agent.run(prompt)
 
-    assessments = [
-        MerchantAssessment(
-            merchant=item.merchant, risk_level=item.risk_level, score=item.score,
-            key_gaps=[g for g in item.key_gaps if g],
-            remediation_priorities=[r for r in item.remediation_priorities if r],
+    # Names come back canonicalized: models shorten the file-stem labels to the bare business
+    # name, and dropping those on strict equality would empty the whole triage.
+    assessments: list[MerchantAssessment] = []
+    seen: set[str] = set()
+    for item in result.output.assessments:
+        label = canonical_merchant(item.merchant, merchants)
+        if label is None or label in seen:
+            continue
+        seen.add(label)
+        assessments.append(
+            MerchantAssessment(
+                merchant=label, risk_level=item.risk_level, score=item.score,
+                key_gaps=[g for g in item.key_gaps if g],
+                remediation_priorities=[r for r in item.remediation_priorities if r],
+            )
         )
-        for item in result.output.assessments
-        if item.merchant in merchants
-    ]
 
     # The ranking must always be total over the assessed merchants: drop names the model
     # invented, then append any merchant it omitted, ordered by (risk level, ascending score).
     assessed = {a.merchant: a for a in assessments}
-    ordering = [m for m in result.output.audit_priority_order if m in assessed]
+    ordering: list[str] = []
+    for name in result.output.audit_priority_order:
+        label = canonical_merchant(name, merchants)
+        if label is not None and label in assessed and label not in ordering:
+            ordering.append(label)
     missing = [a for a in assessments if a.merchant not in ordering]
     missing.sort(key=lambda a: (_RISK_RANK[a.risk_level], a.score))
     ordering.extend(a.merchant for a in missing)
