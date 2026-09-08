@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   // production Docker image doesn't need to ship node_modules or run npm at all.
   output: "standalone",
   // Serves this app under a sub-path of the enterprise agent toolkit's own shared ingress
-  // host (ei-api.mg2.eglb.intel.com/tender-eval) instead of needing a separate DNS entry —
+  // host (ei-api.mg2.eglb.intel.com/merchant-eval) instead of needing a separate DNS entry —
   // see install/k8s/ingress.yaml and install/k8s/README.md. Inlined into the client bundle
   // at build time (verified against node_modules/next/dist/docs/.../basePath.md for this
   // project's pinned Next.js 16 — see frontend/AGENTS.md), so changing it requires a rebuild.

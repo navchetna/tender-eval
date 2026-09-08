@@ -1,4 +1,4 @@
-# Routes tender-eval onto the SAME shared host the enterprise agent toolkit's own gateway
+# Routes merchant-eval onto the SAME shared host the enterprise agent toolkit's own gateway
 # uses (ei-api.mg2.eglb.intel.com) via sub-paths, instead of needing separate DNS entries —
 # same approach as install/helm/pdf-pipeline's /pdf-pipeline route. If you have your own
 # hostnames instead, substitute them below and drop back to path "/" on each (see git history
@@ -7,9 +7,9 @@
 # Two Ingress resources, not one, because the frontend and backend need OPPOSITE path
 # handling and a single `nginx.ingress.kubernetes.io/rewrite-target` annotation applies to
 # every path on the resource:
-#   - Frontend: Next.js's basePath="/tender-eval" (frontend/next.config.ts) expects the
+#   - Frontend: Next.js's basePath="/merchant-eval" (frontend/next.config.ts) expects the
 #     prefix to arrive INTACT — no rewrite.
-#   - Backend: FastAPI has no base-path concept, so /tender-eval-api must be STRIPPED before
+#   - Backend: FastAPI has no base-path concept, so /merchant-eval-api must be STRIPPED before
 #     forwarding — same regex-capture + rewrite-target trick pdf-pipeline's chart uses.
 # The same host/path values are baked into the app itself: the API path must appear in the
 # backend-env secret's CORS_ORIGINS, and it's the frontend image's NEXT_PUBLIC_API_BASE_URL
@@ -21,8 +21,8 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: tender-bid-frontend
-  namespace: tender-bid
+  name: merchant-eval-frontend
+  namespace: merchant-eval
   # annotations:
   #   cert-manager.io/cluster-issuer: letsencrypt
 spec:
@@ -35,7 +35,7 @@ spec:
     - host: ei-api.mg2.eglb.intel.com
       http:
         paths:
-          - path: /tender-eval
+          - path: /merchant-eval
             pathType: Prefix
             backend:
               service:
@@ -46,8 +46,8 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: tender-bid-backend
-  namespace: tender-bid
+  name: merchant-eval-backend
+  namespace: merchant-eval
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /$2
     nginx.ingress.kubernetes.io/use-regex: "true"
@@ -72,7 +72,7 @@ spec:
     - host: ei-api.mg2.eglb.intel.com
       http:
         paths:
-          - path: /tender-eval-api(/|$)(.*)
+          - path: /merchant-eval-api(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
               service:

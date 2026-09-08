@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-command installer for the Kubernetes deployment path.
 #
-# Automates everything that CAN be automated: creating the tender_eval database on the
+# Automates everything that CAN be automated: creating the merchant_eval database on the
 # toolkit's Postgres, generating LITELLM_KEY_ENCRYPTION_KEY, minting ADMIN_LITELLM_KEY /
 # LITELLM_WORKER_API_KEY from the gateway, building both images, creating the namespace +
 # secret, deploying, bootstrapping the schema, and verifying health.
@@ -15,10 +15,10 @@ REPO_ROOT="$(cd ../.. && pwd)"
 GATEWAY_NS="genai-gateway"
 GATEWAY_HOST="genai-gateway-postgresql.genai-gateway.svc.cluster.local"
 GATEWAY_SVC_URL="http://genai-gateway-service.genai-gateway.svc.cluster.local:4000"
-DB_NAME="tender_eval"
-APP_NS="tender-bid"
+DB_NAME="merchant_eval"
+APP_NS="merchant-eval"
 INGRESS_HOST="ei-api.mg2.eglb.intel.com"   # substitute your own toolkit cluster_url if different
-FRONTEND_BASE_PATH="/tender-eval"          # must match ingress.yaml's frontend path exactly
+FRONTEND_BASE_PATH="/merchant-eval"          # must match ingress.yaml's frontend path exactly
 
 ENV_FILE="backend.env"
 ENV_EXAMPLE="backend.env.example"
@@ -56,7 +56,7 @@ require_cmd python3
 kubectl get namespace "$GATEWAY_NS" >/dev/null 2>&1 \
   || die "Namespace '$GATEWAY_NS' not found — deploy the enterprise agent toolkit first (Prerequisite 0 in the root README)."
 
-# --- 0b. Wipe any pre-existing tender-bid namespace ----------------------------------------
+# --- 0b. Wipe any pre-existing merchant-eval namespace ----------------------------------------
 # This installer is meant to stand the app up from scratch every time it's run, so a
 # leftover (or half-deleted/stuck-terminating) namespace from a previous attempt is deleted
 # first rather than reused/adopted. This also drops the schema-bootstrap marker below, since
@@ -64,7 +64,7 @@ kubectl get namespace "$GATEWAY_NS" >/dev/null 2>&1 \
 #
 # pdf-pipeline is NOT touched here — it's a prerequisite deployed separately (its own Helm
 # chart, see ../helm/pdf-pipeline/README.md), the same way genai-gateway is a prerequisite.
-# This script only owns tender-bid.
+# This script only owns merchant-eval.
 if kubectl get namespace "$APP_NS" >/dev/null 2>&1; then
   log "Deleting pre-existing namespace '$APP_NS' (fresh install)"
   kubectl delete namespace "$APP_NS" --wait=true --timeout=180s
@@ -85,20 +85,20 @@ if [ ! -f "$ENV_FILE" ]; then
   cp "$ENV_EXAMPLE" "$ENV_FILE"
 fi
 
-# --- 2. Auto-fill DATABASE_URL (create tender_eval DB if needed) -----------------------
+# --- 2. Auto-fill DATABASE_URL (create merchant_eval DB if needed) -----------------------
 if [ -z "$(get_env DATABASE_URL)" ]; then
   log "DATABASE_URL is blank — creating the '$DB_NAME' database on the toolkit's Postgres"
   PGPASS="$(kubectl get secret genai-gateway-postgresql -n "$GATEWAY_NS" \
     -o jsonpath='{.data.postgres-password}' | base64 -d)"
   [ -n "$PGPASS" ] || die "Could not read genai-gateway-postgresql secret — is the toolkit's GenAI Gateway deployed?"
 
-  EXISTS="$(kubectl run psql-tender-eval-check-$$ -n "$GATEWAY_NS" --rm -i --restart=Never --quiet \
+  EXISTS="$(kubectl run psql-merchant-eval-check-$$ -n "$GATEWAY_NS" --rm -i --restart=Never --quiet \
     --image=bitnamilegacy/postgresql:16 --env="PGPASSWORD=$PGPASS" -- \
     psql -h genai-gateway-postgresql -U postgres -tAc \
     "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" 2>/dev/null | tr -d '[:space:]')"
 
   if [ "$EXISTS" != "1" ]; then
-    kubectl run psql-tender-eval-setup-$$ -n "$GATEWAY_NS" --rm -i --restart=Never --quiet \
+    kubectl run psql-merchant-eval-setup-$$ -n "$GATEWAY_NS" --rm -i --restart=Never --quiet \
       --image=bitnamilegacy/postgresql:16 --env="PGPASSWORD=$PGPASS" -- \
       psql -h genai-gateway-postgresql -U postgres -c "CREATE DATABASE $DB_NAME;"
     ok "Created database '$DB_NAME'"
@@ -139,7 +139,7 @@ mint_litellm_key() {
     curl -s -X POST "$GATEWAY_SVC_URL/key/generate" \
       -H "Authorization: Bearer $master" \
       -H "Content-Type: application/json" \
-      -d "{\"key_alias\": \"tender-eval-${alias}-$(date +%s)\"}" \
+      -d "{\"key_alias\": \"merchant-eval-${alias}-$(date +%s)\"}" \
     | jq -r '.key')"
   echo "$key" | grep -qE '^sk-' || die "Failed to mint the ${alias} LiteLLM key (got: ${key}) — re-run the script to retry."
   echo "$key"
@@ -179,13 +179,13 @@ fi
 
 # --- 6. Build both images ---------------------------------------------------------------
 build "Building backend image"
-( cd "$REPO_ROOT" && $BUILD_CMD -f pydantic_backend/Dockerfile -t tender-bid-backend:local . )
+( cd "$REPO_ROOT" && $BUILD_CMD -f pydantic_backend/Dockerfile -t merchant-eval-backend:local . )
 
 build "Building frontend image"
 ( cd "$REPO_ROOT" && $BUILD_CMD -f frontend/Dockerfile \
-    --build-arg NEXT_PUBLIC_API_BASE_URL="https://${INGRESS_HOST}/tender-eval-api" \
+    --build-arg NEXT_PUBLIC_API_BASE_URL="https://${INGRESS_HOST}/merchant-eval-api" \
     --build-arg NEXT_PUBLIC_BASE_PATH="$FRONTEND_BASE_PATH" \
-    -t tender-bid-frontend:local . )
+    -t merchant-eval-frontend:local . )
 
 # --- 7. Namespace + secret (idempotent) --------------------------------------------------
 log "Creating namespace and backend-env secret"
@@ -254,12 +254,12 @@ fi
 # real certificate wired up by default — see ingress.yaml), so this hits a self-signed
 # default cert. Drop -k once you've set up real TLS.
 log "Verifying"
-curl -sk "https://${INGRESS_HOST}/tender-eval-api/health" && echo
-# -L: "/" 307-redirects to "/tender-eval/projects" (app login/landing logic) — follow it to
+curl -sk "https://${INGRESS_HOST}/merchant-eval-api/health" && echo
+# -L: "/" 307-redirects to "/merchant-eval/projects" (app login/landing logic) — follow it to
 # check the actual page loads, not just that the redirect itself returned.
-FRONTEND_CODE="$(curl -sk -L -o /dev/null -w '%{http_code}' "https://${INGRESS_HOST}/tender-eval")"
+FRONTEND_CODE="$(curl -sk -L -o /dev/null -w '%{http_code}' "https://${INGRESS_HOST}/merchant-eval")"
 echo "Frontend: HTTP $FRONTEND_CODE"
 
 echo
-ok "Done. Frontend: https://${INGRESS_HOST}/tender-eval"
+ok "Done. Frontend: https://${INGRESS_HOST}/merchant-eval"
 note "Next: add reviewers (POST /employees) — see the root README's 'Add reviewers' section."

@@ -26,7 +26,7 @@ What you need on the cluster side:
 
 ## Quick start: `./install.sh`
 
-Steps 1-5 below, done for you: creates the `tender_eval` database, generates
+Steps 1-5 below, done for you: creates the `merchant_eval` database, generates
 `LITELLM_KEY_ENCRYPTION_KEY`, mints `ADMIN_LITELLM_KEY`/`LITELLM_WORKER_API_KEY` from the
 gateway, builds both images, creates the namespace/secret, deploys, bootstraps the schema
 (once — never again, since that step drops+recreates tables), and verifies. Idempotent — safe
@@ -39,11 +39,11 @@ cp backend.env.example backend.env   # first run only, if backend.env doesn't ex
 ```
 
 Verified end-to-end against a live cluster: builds both images, deploys, bootstraps, and
-confirms `.../tender-eval-api/health` returns `{"status":"ok",...}` and `.../tender-eval`
+confirms `.../merchant-eval-api/health` returns `{"status":"ok",...}` and `.../merchant-eval`
 serves the app (`200`, after following its login/landing redirect). One thing this run
 surfaced and fixed: `frontend.yaml`'s readiness/liveness probes originally checked bare `/`,
-which 404s once `frontend/next.config.ts`'s `basePath: "/tender-eval"` is set — nothing is
-served at the bare root anymore. They now check `/tender-eval` instead.
+which 404s once `frontend/next.config.ts`'s `basePath: "/merchant-eval"` is set — nothing is
+served at the bare root anymore. They now check `/merchant-eval` instead.
 
 The only things it genuinely can't do for you — because they require creating an external
 account/credential, not just calling an API with something the cluster already has — are
@@ -65,18 +65,18 @@ IfNotPresent`, bare image names, tag `local`):
 systemctl is-active buildkit || sudo buildkitd --addr unix:///run/buildkit/buildkitd.sock &
 
 sudo nerdctl --namespace k8s.io build -f pydantic_backend/Dockerfile \
-  -t tender-bid-backend:local .
+  -t merchant-eval-backend:local .
 
 # NEXT_PUBLIC_API_BASE_URL is baked into the JS bundle at build time (see frontend/Dockerfile)
 # — set it to the public URL the *browser* will reach the backend on, i.e. the API host in
 # ingress.yaml, and rebuild this image whenever that URL changes.
 sudo nerdctl --namespace k8s.io build -f frontend/Dockerfile \
-  --build-arg NEXT_PUBLIC_API_BASE_URL=https://ei-api.mg2.eglb.intel.com/tender-eval-api \
-  --build-arg NEXT_PUBLIC_BASE_PATH=/tender-eval \
-  -t tender-bid-frontend:local .
+  --build-arg NEXT_PUBLIC_API_BASE_URL=https://ei-api.mg2.eglb.intel.com/merchant-eval-api \
+  --build-arg NEXT_PUBLIC_BASE_PATH=/merchant-eval \
+  -t merchant-eval-frontend:local .
 
 # Confirm both are visible to containerd/kubelet:
-sudo nerdctl --namespace k8s.io images | grep tender-bid
+sudo nerdctl --namespace k8s.io images | grep merchant-eval
 ```
 
 If your cluster has more than one node, this only works on whichever node builds/schedules
@@ -88,14 +88,14 @@ below) and point every node's kubelet at it.
 ```bash
 REGISTRY=registry.example.com   # wherever your cluster pulls from
 
-docker build -f pydantic_backend/Dockerfile -t $REGISTRY/tender-bid-backend:latest .
+docker build -f pydantic_backend/Dockerfile -t $REGISTRY/merchant-eval-backend:latest .
 docker build -f frontend/Dockerfile \
-  --build-arg NEXT_PUBLIC_API_BASE_URL=https://ei-api.mg2.eglb.intel.com/tender-eval-api \
-  --build-arg NEXT_PUBLIC_BASE_PATH=/tender-eval \
-  -t $REGISTRY/tender-bid-frontend:latest .
+  --build-arg NEXT_PUBLIC_API_BASE_URL=https://ei-api.mg2.eglb.intel.com/merchant-eval-api \
+  --build-arg NEXT_PUBLIC_BASE_PATH=/merchant-eval \
+  -t $REGISTRY/merchant-eval-frontend:latest .
 
-docker push $REGISTRY/tender-bid-backend:latest
-docker push $REGISTRY/tender-bid-frontend:latest
+docker push $REGISTRY/merchant-eval-backend:latest
+docker push $REGISTRY/merchant-eval-frontend:latest
 ```
 
 Then point `kustomization.yaml`'s `images:` block (`newName`/`newTag`) at the two pushed
@@ -116,7 +116,7 @@ Fill in every value in `backend.env` (see the comments in that file), including
 `DATABASE_URL` — it's already present as a line to fill in here, unlike the compose example,
 because there's no bundled Postgres in this deployment path.
 
-**Use a database of tender-eval's own, not the toolkit's `litellm` database.** The toolkit's
+**Use a database of merchant-eval's own, not the toolkit's `litellm` database.** The toolkit's
 Postgres (`genai-gateway-postgresql`, in the `genai-gateway` namespace) is a plain Bitnami
 PostgreSQL instance — LiteLLM's own schema lives in one database on it (`litellm`), but the
 same instance's `postgres` superuser account (the chart sets `auth.postgresPassword`, which
@@ -128,30 +128,30 @@ kubectl get secret genai-gateway-postgresql -n genai-gateway \
   -o jsonpath='{.data.postgres-password}' | base64 -d
 ```
 
-Then create a separate `tender_eval` database there instead of pointing this app at `litellm`
+Then create a separate `merchant_eval` database there instead of pointing this app at `litellm`
 directly, so the two schemas never collide:
 
 ```bash
-kubectl run psql-tender-eval-setup -n genai-gateway --rm -i --restart=Never \
+kubectl run psql-merchant-eval-setup -n genai-gateway --rm -i --restart=Never \
   --image=bitnamilegacy/postgresql:16 -- \
   env PGPASSWORD=<postgres_superuser_password> psql \
     -h genai-gateway-postgresql -U postgres \
-    -c "CREATE DATABASE tender_eval;"
+    -c "CREATE DATABASE merchant_eval;"
 ```
 
 (`<postgres_superuser_password>` is the value the lookup above just printed.) Then point this
 app's `DATABASE_URL` at that database, not `litellm`:
 
 ```
-DATABASE_URL=postgresql://postgres:<postgres_superuser_password>@genai-gateway-postgresql.genai-gateway.svc.cluster.local:5432/tender_eval
+DATABASE_URL=postgresql://postgres:<postgres_superuser_password>@genai-gateway-postgresql.genai-gateway.svc.cluster.local:5432/merchant_eval
 ```
 
 Then:
 
 ```bash
-kubectl create namespace tender-bid   # kustomize also creates it, but the secret needs it first
+kubectl create namespace merchant-eval   # kustomize also creates it, but the secret needs it first
 
-kubectl -n tender-bid create secret generic backend-env \
+kubectl -n merchant-eval create secret generic backend-env \
   --from-env-file=backend.env
 ```
 
@@ -178,8 +178,8 @@ works fine from *outside* the cluster (e.g. your own browser, or `curl` from whe
 cluster's topology:
 
 ```bash
-BACKEND_POD=$(kubectl -n tender-bid get pod -l app=backend -o jsonpath='{.items[0].metadata.name}')
-kubectl -n tender-bid exec "$BACKEND_POD" -- python3 -c "
+BACKEND_POD=$(kubectl -n merchant-eval get pod -l app=backend -o jsonpath='{.items[0].metadata.name}')
+kubectl -n merchant-eval exec "$BACKEND_POD" -- python3 -c "
 import httpx
 for url in ['https://ei-api.mg2.eglb.intel.com/v1/models', 'http://genai-gateway-service.genai-gateway.svc.cluster.local:4000/v1/models']:
     try:
@@ -203,14 +203,14 @@ From the repo root:
 
 ```bash
 kubectl apply -k install/k8s
-kubectl -n tender-bid get pods -w   # wait for backend and frontend to go Ready
+kubectl -n merchant-eval get pods -w   # wait for backend and frontend to go Ready
 ```
 
 One-time schema init + admin bootstrap (creates tables and the first ADMIN employee from
 `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `ADMIN_LITELLM_KEY` in `backend-env`):
 
 ```bash
-kubectl -n tender-bid port-forward svc/backend 8011:8011 &
+kubectl -n merchant-eval port-forward svc/backend 8011:8011 &
 curl -X POST http://localhost:8011/setup/database
 kill %1
 ```
@@ -218,8 +218,8 @@ kill %1
 Verify:
 
 ```bash
-curl -s https://ei-api.mg2.eglb.intel.com/tender-eval-api/health
-curl -s -o /dev/null -w "%{http_code}\n" https://ei-api.mg2.eglb.intel.com/tender-eval   # open in a browser to actually use it
+curl -s https://ei-api.mg2.eglb.intel.com/merchant-eval-api/health
+curl -s -o /dev/null -w "%{http_code}\n" https://ei-api.mg2.eglb.intel.com/merchant-eval   # open in a browser to actually use it
 ```
 
 From here everything is deployment-agnostic — adding reviewers and the day-to-day usage flow
@@ -261,7 +261,7 @@ root on whatever machine has `kubectl` access and re-run `./install.sh` (it dete
 and pushes it into the pod automatically), or do it by hand:
 
 ```bash
-kubectl -n tender-bid cp .secrets/gmail-token.json <backend-pod>:/app/.secrets/gmail-token.json
+kubectl -n merchant-eval cp .secrets/gmail-token.json <backend-pod>:/app/.secrets/gmail-token.json
 ```
 
 ## Notes and deviations from the compose setup

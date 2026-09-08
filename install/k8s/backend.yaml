@@ -6,14 +6,14 @@
 #                 PLUS a DATABASE_URL pointing at the enterprise agent toolkit's Postgres
 #                 (no Postgres is deployed here, unlike the compose setup's bundled fallback).
 #
-# The image name `tender-bid-backend` is a placeholder — kustomization.yaml rewrites it to
+# The image name `merchant-eval-backend` is a placeholder — kustomization.yaml rewrites it to
 # your registry (k8s can't build from source the way docker compose does, so the image must
 # be built and pushed first; see README.md).
 apiVersion: v1
 kind: Service
 metadata:
   name: backend
-  namespace: tender-bid
+  namespace: merchant-eval
 spec:
   selector:
     app: backend
@@ -26,7 +26,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: gmail-token
-  namespace: tender-bid
+  namespace: merchant-eval
 spec:
   accessModes:
     - ReadWriteOnce
@@ -40,7 +40,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend
-  namespace: tender-bid
+  namespace: merchant-eval
 spec:
   # Keep this at 1: the pod runs the unattended background pipeline worker (see
   # PARSE_WORKER_ENABLED in backend.env), and the gmail-token volume below is ReadWriteOnce.
@@ -59,7 +59,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: tender-bid-backend
+          image: merchant-eval-backend
           # IfNotPresent: use a locally built image (e.g. via nerdctl into the
           # k8s.io containerd namespace, no registry) without kubelet trying
           # to pull it. Change to Always once you push to a real registry.

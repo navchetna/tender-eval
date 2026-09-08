@@ -1,6 +1,6 @@
 # The reviewer-facing Next.js UI.
 #
-# The image name `tender-bid-frontend` is a placeholder — kustomization.yaml rewrites it to
+# The image name `merchant-eval-frontend` is a placeholder — kustomization.yaml rewrites it to
 # your registry. Remember that NEXT_PUBLIC_API_BASE_URL is baked into the JS bundle at image
 # BUILD time (see frontend/Dockerfile) — pointing the UI at a different backend URL means
 # rebuilding and re-pushing the image, not editing anything in this file.
@@ -8,7 +8,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: frontend
-  namespace: tender-bid
+  namespace: merchant-eval
 spec:
   selector:
     app: frontend
@@ -21,7 +21,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: frontend
-  namespace: tender-bid
+  namespace: merchant-eval
 spec:
   # The frontend is stateless — safe to scale up, unlike the backend.
   replicas: 1
@@ -35,7 +35,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: tender-bid-frontend
+          image: merchant-eval-frontend
           # IfNotPresent: use a locally built image (e.g. via nerdctl into the
           # k8s.io containerd namespace, no registry) without kubelet trying
           # to pull it. Change to Always once you push to a real registry.
@@ -43,17 +43,17 @@ spec:
           ports:
             - name: http
               containerPort: 3000
-          # Path includes basePath ("/tender-eval", set in frontend/next.config.ts) —
+          # Path includes basePath ("/merchant-eval", set in frontend/next.config.ts) —
           # bare "/" 404s once basePath is set, since nothing is served there anymore.
           readinessProbe:
             httpGet:
-              path: /tender-eval
+              path: /merchant-eval
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /tender-eval
+              path: /merchant-eval
               port: http
             initialDelaySeconds: 30
             periodSeconds: 20
