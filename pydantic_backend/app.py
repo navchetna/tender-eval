@@ -217,7 +217,14 @@ async def _run_evaluation_review(
             tree_entry = next((v for k, v in entries.items() if k.endswith('_output_tree.json')), None)
             if tree_entry and tree_entry.get('id'):
                 tree_bytes = await asyncio.to_thread(drive.download_file, get_settings(), tree_entry['id'])
-                _, content = tree_utils.find_section(tree_bytes, decision.corrected_heading)
+                # Bound the corrected section by the other topic's heading, same as detection
+                # does — otherwise a section the parser failed to split out (see tree_utils)
+                # would swallow its sibling's content.
+                other_title = (
+                    record.service_section_title if decision.topic == Topic.payment else record.payment_section_title
+                )
+                stops = [other_title] if other_title and other_title != decision.corrected_heading else []
+                _, content = tree_utils.find_section(tree_bytes, decision.corrected_heading, stop_headings=stops)
         await repository.correct(evaluation_id, decision.topic, user.employee_id, decision.corrected_heading, content)
     else:
         await repository.approve(evaluation_id, decision.topic, user.employee_id)

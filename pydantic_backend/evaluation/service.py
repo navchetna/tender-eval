@@ -44,21 +44,31 @@ async def _detect(creds: LlmCredentials, settings: Settings, file: PendingFile) 
     if tree_entry and tree_entry.get('id'):
         tree_bytes = await asyncio.to_thread(drive.download_file, settings, tree_entry['id'])
 
-    def _resolve(heading: str | None) -> SectionSuggestion:
+    def _resolve(heading: str | None, other_heading: str | None) -> SectionSuggestion:
         if not heading:
             return SectionSuggestion()
         if tree_bytes is None:
             return SectionSuggestion(heading=heading, matched=False)
-        matched_heading, content = tree_utils.find_section(tree_bytes, heading)
+        # The other topic's heading bounds this section: the parser sometimes leaves the next
+        # section inline inside the previous one (see tree_utils), and without the boundary
+        # one topic's content silently includes the other's.
+        stops = [other_heading] if other_heading and other_heading != heading else []
+        matched_heading, content = tree_utils.find_section(tree_bytes, heading, stop_headings=stops)
         if matched_heading is None:
             return SectionSuggestion(heading=heading, matched=False)
         return SectionSuggestion(heading=matched_heading, content=content, matched=True)
 
-    return DetectionResult(
-        payment=_resolve(payment_heading),
-        service=_resolve(service_heading),
-        model=creds.model,
-    )
+    payment = _resolve(payment_heading, service_heading)
+    service = _resolve(service_heading, payment_heading)
+    # If both topics still resolved to the very same section (the LLM suggested one heading
+    # for both, or the tree only distinguishes one), keep it only as the payment suggestion:
+    # a duplicated section would show the same full content under both topics. An empty
+    # service suggestion stays SUGGESTED, so the reviewer supplies the right heading via the
+    # correction flow (which re-extracts through find_section's inline-heading fallback).
+    if payment.matched and service.matched and payment.content == service.content:
+        service = SectionSuggestion()
+
+    return DetectionResult(payment=payment, service=service, model=creds.model)
 
 
 async def detect_and_store(

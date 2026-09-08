@@ -17,7 +17,9 @@ _SYSTEM_PROMPT = (
     'disclosures, refunds and turnaround times). Prefer a heading whose section contains '
     'concrete checklist tables or itemised obligations over a general introduction. '
     'Use the heading text exactly as it appears in the TOC (drop the leading level marker if '
-    'the TOC uses a "level;heading" format). If no suitable section exists, use null.'
+    'the TOC uses a "level;heading" format). The payment and service sections are always two '
+    'DIFFERENT headings — never answer with the same heading for both; if only one topic has '
+    'a suitable section, use null for the other. If no suitable section exists, use null.'
 )
 
 
