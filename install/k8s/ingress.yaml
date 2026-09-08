@@ -61,6 +61,10 @@ metadata:
     # document size/bidder count; tighten if you have latency requirements that need it.
     nginx.ingress.kubernetes.io/proxy-read-timeout: "1800"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "1800"
+    # nginx-ingress' default client_max_body_size is 1m, which 413s any circular/submission
+    # PDF over ~1 MB at the ingress before the app ever sees it (the 62-page NPCI guidelines
+    # demo doc alone is 1.7 MB). 64m comfortably covers multi-file uploads of scanned PDFs.
+    nginx.ingress.kubernetes.io/proxy-body-size: "64m"
     # cert-manager.io/cluster-issuer: letsencrypt
 spec:
   ingressClassName: nginx
