@@ -33,9 +33,6 @@ _TREE_ARTIFACT_SUFFIX = '_output_tree.json'
 
 async def _detect(creds: LlmCredentials, settings: Settings, file: PendingFile) -> DetectionResult:
     toc_text = file.parse_toc or ''
-    payment_heading, service_heading = (None, None)
-    if toc_text.strip():
-        payment_heading, service_heading = await detect_sections(creds, toc_text)
 
     tree_bytes: bytes | None = None
     artifacts = file.parse_artifacts or {}
@@ -58,8 +55,31 @@ async def _detect(creds: LlmCredentials, settings: Settings, file: PendingFile) 
             return SectionSuggestion(heading=heading, matched=False)
         return SectionSuggestion(heading=matched_heading, content=content, matched=True)
 
-    payment = _resolve(payment_heading, service_heading)
-    service = _resolve(service_heading, payment_heading)
+    async def _detect_and_resolve(toc: str) -> tuple[SectionSuggestion, SectionSuggestion]:
+        payment_heading, service_heading = await detect_sections(creds, toc)
+        return _resolve(payment_heading, service_heading), _resolve(service_heading, payment_heading)
+
+    payment, service = SectionSuggestion(), SectionSuggestion()
+    if toc_text.strip():
+        payment, service = await _detect_and_resolve(toc_text)
+
+    # Fallback: for long scanned PDFs, the pipeline's TOC extraction routinely comes back
+    # empty or as a few stray lines that name no real section — the model then (correctly)
+    # answers null, or picks a heading whose text OCR lost, and nothing gets extracted. The
+    # parse tree's inline "#" heading lines are a far more complete TOC for those documents,
+    # so if either topic ended up without extracted content, retry detection against a TOC
+    # rebuilt from the tree, keeping the fallback result only where it actually did better.
+    def _unusable(suggestion: SectionSuggestion) -> bool:
+        return not (suggestion.matched and suggestion.content)
+
+    if tree_bytes is not None and (_unusable(payment) or _unusable(service)):
+        fallback_toc = tree_utils.inline_toc(tree_bytes)
+        if fallback_toc.strip() and fallback_toc.strip() != toc_text.strip():
+            payment_retry, service_retry = await _detect_and_resolve(fallback_toc)
+            if _unusable(payment) and not _unusable(payment_retry):
+                payment = payment_retry
+            if _unusable(service) and not _unusable(service_retry):
+                service = service_retry
     # If both topics still resolved to the very same section (the LLM suggested one heading
     # for both, or the tree only distinguishes one), keep it only as the payment suggestion:
     # a duplicated section would show the same full content under both topics. An empty

@@ -21,6 +21,7 @@ silently swallow the next one's:
 """
 from __future__ import annotations
 
+import html
 import json
 from collections.abc import Sequence
 from difflib import SequenceMatcher
@@ -63,6 +64,44 @@ def _collect_text(node: dict) -> str:
                 if isinstance(child_value, dict):
                     parts.append(_collect_text(child_value))
     return '\n'.join(p for p in parts if p)
+
+
+def _own_text(node: dict) -> str:
+    """Only this node's own content text — unlike _collect_text, no descendants."""
+    parts: list[str] = []
+    for item in node.get('content', []) or []:
+        if isinstance(item, dict) and isinstance(item.get('content'), str):
+            parts.append(item['content'])
+    return '\n'.join(parts)
+
+
+def inline_toc(tree_json: bytes | str | dict) -> str:
+    """
+    Rebuild a "level;heading" TOC (the parse_toc format) from the tree itself: node keys plus
+    every inline "#" heading line, in document order. Fallback input for section detection when
+    the pipeline's own parse_toc came out empty or truncated — for long scanned PDFs the OCR
+    TOC extraction routinely captures a handful of stray lines (or nothing) while the tree text
+    still carries every heading inline.
+    """
+    data = json.loads(tree_json) if isinstance(tree_json, (bytes, str)) else tree_json
+    root = data.get('root', data) if isinstance(data, dict) else {}
+    lines: list[str] = []
+
+    def _walk(node: dict, depth: int) -> None:
+        for line in _own_text(node).splitlines():
+            parsed = _inline_heading(line)
+            if parsed is not None:
+                lines.append(f'{parsed[1]};{html.unescape(parsed[0])}')
+        for child_item in node.get('children', []) or []:
+            if isinstance(child_item, dict):
+                for child_heading, child_value in child_item.items():
+                    if isinstance(child_value, dict):
+                        lines.append(f'{depth};{html.unescape(child_heading)}')
+                        _walk(child_value, depth + 1)
+
+    if isinstance(root, dict):
+        _walk(root, 1)
+    return '\n'.join(lines)
 
 
 def _ratio(a: str, b: str) -> float:
