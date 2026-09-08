@@ -1,6 +1,6 @@
 """
 Emails a reviewer when a project is assigned to them, summarizing the project's current
-per-file status and which technical/price sections are still awaiting their review.
+per-file status and which payment/service compliance sections are still awaiting their review.
 
 Plain templated text — no LLM involved (unlike notify_agent.py's drafted reviewer emails for
 newly-suggested sections). Sending is best-effort: a failure here (e.g. the Gmail OAuth token
@@ -16,17 +16,17 @@ from ..config import Settings
 from ..ingestion import gmail
 from ..ingestion.postgres import PostgresRepository
 from .models import EvaluationRecord
-from .repository import bid_repository, tender_repository
+from .repository import circular_repository, submission_repository
 
 
 def _pending_lines(label: str, evaluations: list[EvaluationRecord]) -> list[str]:
     lines: list[str] = []
     for e in evaluations:
         pending_topics = []
-        if e.technical_status == 'SUGGESTED':
-            pending_topics.append('technical')
-        if e.price_status == 'SUGGESTED':
-            pending_topics.append('price')
+        if e.payment_status == 'SUGGESTED':
+            pending_topics.append('payment')
+        if e.service_status == 'SUGGESTED':
+            pending_topics.append('service')
         if pending_topics:
             lines.append(f'  - {e.file_name} ({label}): {", ".join(pending_topics)} section(s) awaiting review')
     return lines
@@ -47,15 +47,15 @@ async def _build_email(settings: Settings, project: dict) -> tuple[str, str]:
 
     files = await PostgresRepository(settings).list_files(project_id)
     current_files = [f for f in files if f['version'] == version]
-    tender_evals = await tender_repository(settings).list_by_project_version(project_id, version)
-    bid_evals = await bid_repository(settings).list_by_project_version(project_id, version)
+    circular_evals = await circular_repository(settings).list_by_project_version(project_id, version)
+    submission_evals = await submission_repository(settings).list_by_project_version(project_id, version)
 
     status_lines = [f'Version {version}:']
     for f in current_files:
-        role = {'TENDER': 'Tender', 'BID': 'Bid'}.get(f['file_type'], f['file_type'])
+        role = {'CIRCULAR': 'Circular', 'SUBMISSION': 'Merchant submission'}.get(f['file_type'], f['file_type'])
         status_lines.append(f"  - {role}: {f['file_name']} — {f['processing_status']}")
 
-    pending_lines = _pending_lines('tender', tender_evals) + _pending_lines('bid', bid_evals)
+    pending_lines = _pending_lines('circular', circular_evals) + _pending_lines('submission', submission_evals)
 
     body_parts = [
         f"You have been assigned to review {project['project_name']} ({project['project_code']}).",

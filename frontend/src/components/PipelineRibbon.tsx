@@ -13,20 +13,20 @@ type StageDef = {
 
 // Static description of the end-to-end agentic pipeline (ingest → matrix). Rendered on every
 // authenticated page so reviewers always see where the automated agents sit relative to the
-// one manual checkpoint (tender canonicalization), reinforcing that everything else is autonomous.
+// one manual checkpoint (circular canonicalization), reinforcing that everything else is autonomous.
 const STAGES: StageDef[] = [
   { icon: Mail, label: "Ingest & parse", caption: "Gmail → Drive → parser" },
-  { icon: Waypoints, label: "Classify", caption: "tender vs bid · versions", agent: true },
+  { icon: Waypoints, label: "Classify", caption: "circular vs submission · versions", agent: true },
   {
     icon: Target,
     label: "Locate sections",
-    caption: "Technical / Price",
+    caption: "Payment / Service",
     agent: true,
     humanNote: "human validates",
   },
   { icon: ListChecks, label: "Extract clauses", caption: "per category", agent: true },
-  { icon: Shuffle, label: "Align", caption: "semantic tender ⇄ bid", agent: true },
-  { icon: Grid2x2, label: "Compliance matrix", caption: "Excel · per bidder" },
+  { icon: Shuffle, label: "Align", caption: "semantic circular ⇄ submission", agent: true },
+  { icon: Grid2x2, label: "Compliance matrix", caption: "Excel · per merchant" },
 ];
 
 export function PipelineRibbon({ activeStage = null }: { activeStage?: number | null }) {

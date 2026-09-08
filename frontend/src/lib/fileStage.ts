@@ -4,7 +4,7 @@ import type { EvaluationRecord, ProjectFileRecord } from "@/lib/types";
 
 // Same 5-stage ladder as the project-level track (see lib/projectStage.ts), applied to a single
 // file. "Aligned" for one file means: this file's own sections are approved, AND the file it's
-// compared against (tender <-> bid) is also approved — passed in by the caller as
+// compared against (circular <-> submission) is also approved — passed in by the caller as
 // `alignmentReady`, since that depends on the *other* side's evaluation, not this file's own.
 export function computeFileSegments(file: ProjectFileRecord, evaluation: EvaluationRecord | null, alignmentReady: boolean): Seg[] {
   const segs: Seg[] = Array(5).fill("todo");

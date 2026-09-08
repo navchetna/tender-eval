@@ -64,52 +64,60 @@ CREATE TABLE IF NOT EXISTS file_repository (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (email_message_id, file_name)
 );
-CREATE TABLE IF NOT EXISTS tender_evaluations (
+CREATE TABLE IF NOT EXISTS circular_evaluations (
   evaluation_id UUID PRIMARY KEY,
   file_id UUID NOT NULL UNIQUE REFERENCES file_repository(file_id),
   project_id UUID NOT NULL REFERENCES projects(project_id),
   version INTEGER NOT NULL,
   detection_model TEXT,
-  technical_section_title TEXT,
-  technical_section_content TEXT,
-  technical_status TEXT NOT NULL DEFAULT 'SUGGESTED',
-  technical_corrected BOOLEAN NOT NULL DEFAULT false,
-  technical_reviewed_by UUID REFERENCES employees(employee_id),
-  technical_reviewed_at TIMESTAMPTZ,
-  price_section_title TEXT,
-  price_section_content TEXT,
-  price_status TEXT NOT NULL DEFAULT 'SUGGESTED',
-  price_corrected BOOLEAN NOT NULL DEFAULT false,
-  price_reviewed_by UUID REFERENCES employees(employee_id),
-  price_reviewed_at TIMESTAMPTZ,
+  payment_section_title TEXT,
+  payment_section_content TEXT,
+  payment_ai_title TEXT,
+  payment_ai_content TEXT,
+  payment_status TEXT NOT NULL DEFAULT 'SUGGESTED',
+  payment_corrected BOOLEAN NOT NULL DEFAULT false,
+  payment_reviewed_by UUID REFERENCES employees(employee_id),
+  payment_reviewed_at TIMESTAMPTZ,
+  service_section_title TEXT,
+  service_section_content TEXT,
+  service_ai_title TEXT,
+  service_ai_content TEXT,
+  service_status TEXT NOT NULL DEFAULT 'SUGGESTED',
+  service_corrected BOOLEAN NOT NULL DEFAULT false,
+  service_reviewed_by UUID REFERENCES employees(employee_id),
+  service_reviewed_at TIMESTAMPTZ,
   notified_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE TABLE IF NOT EXISTS bid_evaluations (
+CREATE TABLE IF NOT EXISTS submission_evaluations (
   evaluation_id UUID PRIMARY KEY,
   file_id UUID NOT NULL UNIQUE REFERENCES file_repository(file_id),
   project_id UUID NOT NULL REFERENCES projects(project_id),
   version INTEGER NOT NULL,
   detection_model TEXT,
-  technical_section_title TEXT,
-  technical_section_content TEXT,
-  technical_status TEXT NOT NULL DEFAULT 'SUGGESTED',
-  technical_corrected BOOLEAN NOT NULL DEFAULT false,
-  technical_reviewed_by UUID REFERENCES employees(employee_id),
-  technical_reviewed_at TIMESTAMPTZ,
-  price_section_title TEXT,
-  price_section_content TEXT,
-  price_status TEXT NOT NULL DEFAULT 'SUGGESTED',
-  price_corrected BOOLEAN NOT NULL DEFAULT false,
-  price_reviewed_by UUID REFERENCES employees(employee_id),
-  price_reviewed_at TIMESTAMPTZ,
+  payment_section_title TEXT,
+  payment_section_content TEXT,
+  payment_ai_title TEXT,
+  payment_ai_content TEXT,
+  payment_status TEXT NOT NULL DEFAULT 'SUGGESTED',
+  payment_corrected BOOLEAN NOT NULL DEFAULT false,
+  payment_reviewed_by UUID REFERENCES employees(employee_id),
+  payment_reviewed_at TIMESTAMPTZ,
+  service_section_title TEXT,
+  service_section_content TEXT,
+  service_ai_title TEXT,
+  service_ai_content TEXT,
+  service_status TEXT NOT NULL DEFAULT 'SUGGESTED',
+  service_corrected BOOLEAN NOT NULL DEFAULT false,
+  service_reviewed_by UUID REFERENCES employees(employee_id),
+  service_reviewed_at TIMESTAMPTZ,
   notified_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
--- Every LLM-computed normalization result (aligned technical/price view, holistic score,
--- detailed comparison, compliance matrix) is a pure function of the *approved* tender/bid
+-- Every LLM-computed normalization result (aligned payment/service view, holistic score,
+-- risk triage, compliance matrix) is a pure function of the *approved* circular/submission
 -- section content for one project/version, yet was previously recomputed — and re-billed —
 -- from scratch on every single view. Cached here, keyed by (project_id, version, kind, topic),
 -- and invalidated in one place whenever that content actually changes (see
@@ -117,8 +125,8 @@ CREATE TABLE IF NOT EXISTS bid_evaluations (
 CREATE TABLE IF NOT EXISTS llm_result_cache (
   project_id UUID NOT NULL REFERENCES projects(project_id),
   version INTEGER NOT NULL,
-  kind TEXT NOT NULL,              -- 'view' | 'score' | 'compare' | 'matrix'
-  topic TEXT NOT NULL DEFAULT '',  -- 'technical' | 'price' | '' (compare/matrix span both)
+  kind TEXT NOT NULL,              -- 'view' | 'score' | 'triage' | 'matrix'
+  topic TEXT NOT NULL DEFAULT '',  -- 'payment' | 'service' | '' (triage/matrix span both)
   data JSONB NOT NULL,
   computed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (project_id, version, kind, topic)
@@ -126,33 +134,29 @@ CREATE TABLE IF NOT EXISTS llm_result_cache (
 '''
 
 # Additive migrations for databases created before auth/assignment existed — CREATE TABLE
-# IF NOT EXISTS above won't retrofit columns onto an already-existing table.
+# IF NOT EXISTS above won't retrofit columns onto an already-existing table. The circular/
+# submission evaluation tables carry every column in SCHEMA_SQL from the start (this branch
+# targets a fresh database), so no ALTERs are needed for them.
 MIGRATION_SQL = '''
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS password_hash TEXT;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'REVIEWER';
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS litellm_key_encrypted TEXT;
 ALTER TABLE file_repository ADD COLUMN IF NOT EXISTS detection_error TEXT;
-ALTER TABLE tender_evaluations ADD COLUMN IF NOT EXISTS technical_ai_title TEXT;
-ALTER TABLE tender_evaluations ADD COLUMN IF NOT EXISTS technical_ai_content TEXT;
-ALTER TABLE tender_evaluations ADD COLUMN IF NOT EXISTS price_ai_title TEXT;
-ALTER TABLE tender_evaluations ADD COLUMN IF NOT EXISTS price_ai_content TEXT;
-ALTER TABLE bid_evaluations ADD COLUMN IF NOT EXISTS technical_ai_title TEXT;
-ALTER TABLE bid_evaluations ADD COLUMN IF NOT EXISTS technical_ai_content TEXT;
-ALTER TABLE bid_evaluations ADD COLUMN IF NOT EXISTS price_ai_title TEXT;
-ALTER TABLE bid_evaluations ADD COLUMN IF NOT EXISTS price_ai_content TEXT;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS assigned_to UUID REFERENCES employees(employee_id);
 ALTER TABLE file_repository ALTER COLUMN email_message_id DROP NOT NULL;
 ALTER TABLE file_repository ALTER COLUMN email_from DROP NOT NULL;
 ALTER TABLE file_repository ALTER COLUMN email_subject DROP NOT NULL;
 ALTER TABLE file_repository ALTER COLUMN email_received_at DROP NOT NULL;
--- Superseded by llm_result_cache above (same idea, generalized to every LLM-computed result).
-DROP TABLE IF EXISTS compliance_matrix_cache;
 '''
 
 
 def classify(attachment: Attachment) -> FileType:
     name = attachment.file_name.lower()
-    return FileType.tender if 'tender' in name else FileType.bid if 'bid' in name else FileType.unknown
+    if 'circular' in name or 'checklist' in name or 'guidelines' in name:
+        return FileType.circular
+    if 'certification' in name or 'merchant' in name or 'submission' in name:
+        return FileType.submission
+    return FileType.unknown
 
 
 @dataclass
@@ -192,15 +196,15 @@ class PostgresRepository:
     async def list_projects(self, assigned_to: str | None) -> list[dict]:
         """All projects, or only those assigned to a given employee_id (reviewer scoping).
 
-        `evaluation_completed` is true once a final cross-topic comparison has been generated
-        for the project's *current* version (llm_result_cache, kind='compare') — it goes back
+        `evaluation_completed` is true once a cross-topic risk triage has been generated
+        for the project's *current* version (llm_result_cache, kind='triage') — it goes back
         to false the moment a correction invalidates that cache entry, and naturally resets
         when a new version starts, since the subquery is pinned to current_version.
         """
         query = '''
             SELECT p.*, EXISTS (
                 SELECT 1 FROM llm_result_cache c
-                WHERE c.project_id = p.project_id AND c.version = p.current_version AND c.kind = 'compare'
+                WHERE c.project_id = p.project_id AND c.version = p.current_version AND c.kind = 'triage'
             ) AS evaluation_completed
             FROM projects p
         '''
@@ -222,14 +226,14 @@ class PostgresRepository:
 
     async def delete_project(self, project_id: str) -> bool:
         """Permanently remove a project and everything scoped to it (every version's files,
-        tender/bid evaluations, cached LLM results). No FK is ON DELETE CASCADE, so the
-        dependents are deleted first, in one transaction. Returns False if the project
+        circular/submission evaluations, cached LLM results). No FK is ON DELETE CASCADE, so
+        the dependents are deleted first, in one transaction. Returns False if the project
         didn't exist."""
         async with pool_connection(self.settings) as connection:
             async with connection.cursor() as cursor:
                 await cursor.execute('DELETE FROM llm_result_cache WHERE project_id = %s', (project_id,))
-                await cursor.execute('DELETE FROM tender_evaluations WHERE project_id = %s', (project_id,))
-                await cursor.execute('DELETE FROM bid_evaluations WHERE project_id = %s', (project_id,))
+                await cursor.execute('DELETE FROM circular_evaluations WHERE project_id = %s', (project_id,))
+                await cursor.execute('DELETE FROM submission_evaluations WHERE project_id = %s', (project_id,))
                 await cursor.execute('DELETE FROM file_repository WHERE project_id = %s', (project_id,))
                 await cursor.execute('DELETE FROM projects WHERE project_id = %s RETURNING project_id', (project_id,))
                 deleted = await cursor.fetchone()
@@ -335,12 +339,12 @@ class PostgresRepository:
 
     async def update_file_type(self, file_id: str, file_type: str) -> dict | None:
         """
-        Reclassifying a file (e.g. TENDER -> BID) must also drop any evaluation row it already
-        has under its *old* classification — otherwise that row is orphaned (references a file
-        that's no longer a tender/bid), and worse, claim_pending_files() for the *new* type sees
-        a PARSED file with no evaluation row yet in the new type's table and detects it fresh,
-        producing a second, duplicate evaluation for the same file (and an inflated pending
-        count in the review queue) alongside the stale original.
+        Reclassifying a file (e.g. CIRCULAR -> SUBMISSION) must also drop any evaluation row it
+        already has under its *old* classification — otherwise that row is orphaned (references
+        a file that's no longer a circular/submission), and worse, claim_pending_files() for the
+        *new* type sees a PARSED file with no evaluation row yet in the new type's table and
+        detects it fresh, producing a second, duplicate evaluation for the same file (and an
+        inflated pending count in the review queue) alongside the stale original.
         """
         async with pool_connection(self.settings) as connection:
             async with connection.cursor() as cursor:
@@ -349,10 +353,10 @@ class PostgresRepository:
                     (file_type, file_id),
                 )
                 row = await cursor.fetchone()
-                if file_type != 'TENDER':
-                    await cursor.execute('DELETE FROM tender_evaluations WHERE file_id = %s', (file_id,))
-                if file_type != 'BID':
-                    await cursor.execute('DELETE FROM bid_evaluations WHERE file_id = %s', (file_id,))
+                if file_type != 'CIRCULAR':
+                    await cursor.execute('DELETE FROM circular_evaluations WHERE file_id = %s', (file_id,))
+                if file_type != 'SUBMISSION':
+                    await cursor.execute('DELETE FROM submission_evaluations WHERE file_id = %s', (file_id,))
             await connection.commit()
         return row
 
@@ -383,7 +387,7 @@ class PostgresRepository:
 
     async def list_files(self, project_id: str) -> list[dict]:
         """All file_repository rows for a project (every version), newest first. Backs the
-        frontend's per-project document list (Workspace bidder/tender lists, Ops table)."""
+        frontend's per-project document list (Workspace merchant/circular lists, Ops table)."""
         async with pool_connection(self.settings) as connection:
             async with connection.cursor() as cursor:
                 await cursor.execute(

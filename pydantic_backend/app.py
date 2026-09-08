@@ -16,7 +16,7 @@ from .evaluation import assignment_notify, tree_utils
 from .evaluation.employee_repository import EmailAlreadyExistsError, EmployeeInUseError, EmployeeNotFoundError, EmployeeRepository
 from .evaluation.models import DetectionResult, Employee, EmployeeIn, EmployeeUpdate, EvaluationRecord, ReviewDecision, SectionSuggestion, Topic
 from .evaluation.models import PendingFile as EvaluationPendingFile
-from .evaluation.repository import EvaluationRepository, bid_repository, tender_repository
+from .evaluation.repository import EvaluationRepository, circular_repository, submission_repository
 from .evaluation.service import process_pending as process_pending_evaluations
 from .evaluation.service import resend_notification
 from .evaluation.service import retry_file as retry_evaluation_file
@@ -26,13 +26,13 @@ from .ingestion.pipeline import AlreadyIngestedError, persist_gmail_email
 from .ingestion.models import FileType, FileTypeUpdate, IncomingEmail, Project, ProjectFileRecord, ProjectIn, StoredFile
 from .ingestion.postgres import PostgresRepository
 from .llm_credentials import LlmCredentials, encrypt_key
-from .normalization import compare_client as normalization_compare_client
 from .normalization import compliance_service
 from .normalization import excel as normalization_excel
 from .normalization import llm_result_cache
 from .normalization import score_client as normalization_score_client
 from .normalization import service as normalization_service
-from .normalization.models import ComparisonResult, DefaultPrompts, MatrixData, NormalizedView, PromptOverride, SectionScoreResult
+from .normalization import triage_client as normalization_triage_client
+from .normalization.models import DefaultPrompts, MatrixData, NormalizedView, PromptOverride, RiskTriageResult, SectionScoreResult
 from .observability import configure_observability
 from .parsing.models import ParseArtifacts
 from .parsing.models import PendingFile as ParsingPendingFile
@@ -42,7 +42,7 @@ from .parsing.worker import run_worker
 from .pipeline_detail import FileStageDetail, build_file_stage_detail
 
 configure_observability()
-app = FastAPI(title='Tender Repository Ingestion', version='0.3.0')
+app = FastAPI(title='Merchant Compliance Repository Ingestion', version='0.3.0')
 logfire.instrument_fastapi(app)
 
 app.add_middleware(
@@ -222,7 +222,7 @@ async def _run_evaluation_review(
     else:
         await repository.approve(evaluation_id, decision.topic, user.employee_id)
 
-    # Every cached normalization result (view/score/compare/matrix) is a pure function of
+    # Every cached normalization result (view/score/triage/matrix) is a pure function of
     # approved section content for this project/version — any approval or correction
     # invalidates all of them.
     await llm_result_cache.invalidate(get_settings(), record.project_id, record.version)
@@ -236,139 +236,139 @@ def _pending_filter(user: CurrentUser) -> str | None:
     return None if user.role == Role.admin else user.employee_id
 
 
-# --- Tender document section evaluation ---------------------------------------------
+# --- Circular document section evaluation -------------------------------------------
 
-@app.post('/evaluation/tender/process-pending')
-async def evaluation_tender_process_pending(
+@app.post('/evaluation/circular/process-pending')
+async def evaluation_circular_process_pending(
     _admin: CurrentUser = Depends(require_admin), creds: LlmCredentials = Depends(get_llm_credentials)
 ) -> list[str]:
-    """Detect technical/price sections for PARSED tender files that have no evaluation yet, and notify the reviewer."""
-    return await _run_evaluation_process_pending(creds, tender_repository(get_settings()))
+    """Detect payment/service compliance sections for PARSED circular files that have no evaluation yet, and notify the reviewer."""
+    return await _run_evaluation_process_pending(creds, circular_repository(get_settings()))
 
 
-@app.get('/evaluation/tender/pending')
-async def evaluation_tender_list_pending(user: CurrentUser = Depends(get_current_user)) -> list[EvaluationRecord]:
-    """List tender evaluations still awaiting a technical or price review decision.
+@app.get('/evaluation/circular/pending')
+async def evaluation_circular_list_pending(user: CurrentUser = Depends(get_current_user)) -> list[EvaluationRecord]:
+    """List circular evaluations still awaiting a payment or service compliance review decision.
     Reviewers only see evaluations for their assigned project(s); admins see everything."""
-    return await tender_repository(get_settings()).list_pending_review(_pending_filter(user))
+    return await circular_repository(get_settings()).list_pending_review(_pending_filter(user))
 
 
-@app.get('/evaluation/tender')
-async def evaluation_tender_list_by_project(
+@app.get('/evaluation/circular')
+async def evaluation_circular_list_by_project(
     project_id: str = Query(...), version: int = Query(...), user: CurrentUser = Depends(get_current_user)
 ) -> list[EvaluationRecord]:
-    """All tender evaluations (normally 0 or 1) for a project/version, regardless of review status."""
+    """All circular evaluations (normally 0 or 1) for a project/version, regardless of review status."""
     await _ensure_project_access(project_id, user)
-    return await tender_repository(get_settings()).list_by_project_version(project_id, version)
+    return await circular_repository(get_settings()).list_by_project_version(project_id, version)
 
 
-@app.get('/evaluation/tender/{evaluation_id}')
-async def evaluation_tender_get(evaluation_id: str, user: CurrentUser = Depends(get_current_user)) -> EvaluationRecord:
-    record = await tender_repository(get_settings()).get_evaluation(evaluation_id)
+@app.get('/evaluation/circular/{evaluation_id}')
+async def evaluation_circular_get(evaluation_id: str, user: CurrentUser = Depends(get_current_user)) -> EvaluationRecord:
+    record = await circular_repository(get_settings()).get_evaluation(evaluation_id)
     if record is None:
         raise HTTPException(404, 'Evaluation not found')
     await _ensure_project_access(record.project_id, user)
     return record
 
 
-@app.post('/evaluation/tender/{evaluation_id}/notify')
-async def evaluation_tender_notify(
+@app.post('/evaluation/circular/{evaluation_id}/notify')
+async def evaluation_circular_notify(
     evaluation_id: str, user: CurrentUser = Depends(get_current_user), creds: LlmCredentials = Depends(get_llm_credentials)
 ) -> dict[str, bool]:
     """Re-send the reviewer notification email (useful if reviewer_email was unset on first run)."""
-    return await _run_evaluation_notify(creds, tender_repository(get_settings()), evaluation_id, user)
+    return await _run_evaluation_notify(creds, circular_repository(get_settings()), evaluation_id, user)
 
 
-@app.post('/evaluation/tender/{evaluation_id}/review')
-async def evaluation_tender_review(
+@app.post('/evaluation/circular/{evaluation_id}/review')
+async def evaluation_circular_review(
     evaluation_id: str, decision: ReviewDecision, user: CurrentUser = Depends(get_current_user)
 ) -> EvaluationRecord:
-    return await _run_evaluation_review(tender_repository(get_settings()), evaluation_id, decision, user)
+    return await _run_evaluation_review(circular_repository(get_settings()), evaluation_id, decision, user)
 
 
-# --- Bid document section evaluation (same flow, per bid file) ----------------------
+# --- Submission document section evaluation (same flow, per merchant file) -----------
 # NOTE: this section (and its bare-path siblings below) must stay registered BEFORE the
 # deprecated `/evaluation/{evaluation_id}` catch-all — Starlette matches routes in
 # registration order, and a single dynamic segment like `{evaluation_id}` will otherwise
-# swallow literal-looking paths such as `/evaluation/bid` before this section is ever reached.
+# swallow literal-looking paths such as `/evaluation/submission` before this section is ever reached.
 
-@app.post('/evaluation/bid/process-pending')
-async def evaluation_bid_process_pending(
+@app.post('/evaluation/submission/process-pending')
+async def evaluation_submission_process_pending(
     _admin: CurrentUser = Depends(require_admin), creds: LlmCredentials = Depends(get_llm_credentials)
 ) -> list[str]:
-    """Detect technical/price sections for PARSED bid files that have no evaluation yet, and notify the reviewer."""
-    return await _run_evaluation_process_pending(creds, bid_repository(get_settings()))
+    """Detect payment/service compliance sections for PARSED submission files that have no evaluation yet, and notify the reviewer."""
+    return await _run_evaluation_process_pending(creds, submission_repository(get_settings()))
 
 
-@app.get('/evaluation/bid/pending')
-async def evaluation_bid_list_pending(user: CurrentUser = Depends(get_current_user)) -> list[EvaluationRecord]:
-    """List bid evaluations still awaiting a technical or price review decision.
+@app.get('/evaluation/submission/pending')
+async def evaluation_submission_list_pending(user: CurrentUser = Depends(get_current_user)) -> list[EvaluationRecord]:
+    """List submission evaluations still awaiting a payment or service compliance review decision.
     Reviewers only see evaluations for their assigned project(s); admins see everything."""
-    return await bid_repository(get_settings()).list_pending_review(_pending_filter(user))
+    return await submission_repository(get_settings()).list_pending_review(_pending_filter(user))
 
 
-@app.get('/evaluation/bid')
-async def evaluation_bid_list_by_project(
+@app.get('/evaluation/submission')
+async def evaluation_submission_list_by_project(
     project_id: str = Query(...), version: int = Query(...), user: CurrentUser = Depends(get_current_user)
 ) -> list[EvaluationRecord]:
-    """All bid evaluations (one per bidder file) for a project/version, regardless of review status."""
+    """All submission evaluations (one per merchant file) for a project/version, regardless of review status."""
     await _ensure_project_access(project_id, user)
-    return await bid_repository(get_settings()).list_by_project_version(project_id, version)
+    return await submission_repository(get_settings()).list_by_project_version(project_id, version)
 
 
-@app.get('/evaluation/bid/{evaluation_id}')
-async def evaluation_bid_get(evaluation_id: str, user: CurrentUser = Depends(get_current_user)) -> EvaluationRecord:
-    record = await bid_repository(get_settings()).get_evaluation(evaluation_id)
+@app.get('/evaluation/submission/{evaluation_id}')
+async def evaluation_submission_get(evaluation_id: str, user: CurrentUser = Depends(get_current_user)) -> EvaluationRecord:
+    record = await submission_repository(get_settings()).get_evaluation(evaluation_id)
     if record is None:
         raise HTTPException(404, 'Evaluation not found')
     await _ensure_project_access(record.project_id, user)
     return record
 
 
-@app.post('/evaluation/bid/{evaluation_id}/notify')
-async def evaluation_bid_notify(
+@app.post('/evaluation/submission/{evaluation_id}/notify')
+async def evaluation_submission_notify(
     evaluation_id: str, user: CurrentUser = Depends(get_current_user), creds: LlmCredentials = Depends(get_llm_credentials)
 ) -> dict[str, bool]:
-    return await _run_evaluation_notify(creds, bid_repository(get_settings()), evaluation_id, user)
+    return await _run_evaluation_notify(creds, submission_repository(get_settings()), evaluation_id, user)
 
 
-@app.post('/evaluation/bid/{evaluation_id}/review')
-async def evaluation_bid_review(
+@app.post('/evaluation/submission/{evaluation_id}/review')
+async def evaluation_submission_review(
     evaluation_id: str, decision: ReviewDecision, user: CurrentUser = Depends(get_current_user)
 ) -> EvaluationRecord:
-    return await _run_evaluation_review(bid_repository(get_settings()), evaluation_id, decision, user)
+    return await _run_evaluation_review(submission_repository(get_settings()), evaluation_id, decision, user)
 
 
 # --- Deprecated aliases: bare /evaluation/... routes, kept for backward compatibility ---
-# Prefer the /evaluation/tender/... routes above for new integrations.
+# Prefer the /evaluation/circular/... routes above for new integrations.
 
 @app.post('/evaluation/process-pending')
 async def evaluation_process_pending(
     _admin: CurrentUser = Depends(require_admin), creds: LlmCredentials = Depends(get_llm_credentials)
 ) -> list[str]:
-    return await _run_evaluation_process_pending(creds, tender_repository(get_settings()))
+    return await _run_evaluation_process_pending(creds, circular_repository(get_settings()))
 
 
 @app.get('/evaluation/pending')
 async def evaluation_list_pending(user: CurrentUser = Depends(get_current_user)) -> list[EvaluationRecord]:
-    return await tender_repository(get_settings()).list_pending_review(_pending_filter(user))
+    return await circular_repository(get_settings()).list_pending_review(_pending_filter(user))
 
 
 @app.get('/evaluation/pending/count')
 async def evaluation_pending_count(user: CurrentUser = Depends(get_current_user)) -> dict[str, int]:
-    """Backs the review-queue sidebar badge: tender + bid evaluations (of either doc type)
-    still awaiting a technical/price decision. Admins get the total across every project;
-    reviewers only count what's assigned to them — same scoping as list_pending_review."""
+    """Backs the review-queue sidebar badge: circular + submission evaluations (of either doc
+    type) still awaiting a payment/service compliance decision. Admins get the total across
+    every project; reviewers only count what's assigned to them — same scoping as list_pending_review."""
     settings = get_settings()
     filter_id = _pending_filter(user)
-    tender_count = await tender_repository(settings).count_pending_review(filter_id)
-    bid_count = await bid_repository(settings).count_pending_review(filter_id)
-    return {'count': tender_count + bid_count}
+    circular_count = await circular_repository(settings).count_pending_review(filter_id)
+    submission_count = await submission_repository(settings).count_pending_review(filter_id)
+    return {'count': circular_count + submission_count}
 
 
 @app.get('/evaluation/{evaluation_id}')
 async def evaluation_get(evaluation_id: str, user: CurrentUser = Depends(get_current_user)) -> EvaluationRecord:
-    record = await tender_repository(get_settings()).get_evaluation(evaluation_id)
+    record = await circular_repository(get_settings()).get_evaluation(evaluation_id)
     if record is None:
         raise HTTPException(404, 'Evaluation not found')
     await _ensure_project_access(record.project_id, user)
@@ -379,24 +379,24 @@ async def evaluation_get(evaluation_id: str, user: CurrentUser = Depends(get_cur
 async def evaluation_notify(
     evaluation_id: str, user: CurrentUser = Depends(get_current_user), creds: LlmCredentials = Depends(get_llm_credentials)
 ) -> dict[str, bool]:
-    return await _run_evaluation_notify(creds, tender_repository(get_settings()), evaluation_id, user)
+    return await _run_evaluation_notify(creds, circular_repository(get_settings()), evaluation_id, user)
 
 
 @app.post('/evaluation/{evaluation_id}/review')
 async def evaluation_review(
     evaluation_id: str, decision: ReviewDecision, user: CurrentUser = Depends(get_current_user)
 ) -> EvaluationRecord:
-    return await _run_evaluation_review(tender_repository(get_settings()), evaluation_id, decision, user)
+    return await _run_evaluation_review(circular_repository(get_settings()), evaluation_id, decision, user)
 
 
-# --- Normalized tender-vs-bid comparison view (computed on demand, nothing persisted) ---
+# --- Normalized circular-vs-submissions comparison view (computed on demand, nothing persisted) ---
 
 async def _build_normalized_view(
     creds: LlmCredentials, project_id: str, version: int, topic: Topic, user: CurrentUser
 ) -> NormalizedView:
-    """Backs /technical, /price, and /export. Building this runs a row/header alignment LLM
-    call per approved bid, so the result is cached (see llm_result_cache) and only recomputed
-    once a section is (re)approved or corrected for this project/version."""
+    """Backs /payment, /service, and /export. Building this runs a row/header alignment LLM
+    call per approved submission, so the result is cached (see llm_result_cache) and only
+    recomputed once a section is (re)approved or corrected for this project/version."""
     await _ensure_project_access(project_id, user)
     settings = get_settings()
     cached = await llm_result_cache.get_cached(settings, project_id, version, 'view', topic.value)
@@ -404,7 +404,7 @@ async def _build_normalized_view(
         return NormalizedView.model_validate(cached)
     try:
         view = await normalization_service.build_view(
-            creds, tender_repository(settings), bid_repository(settings), project_id, version, topic,
+            creds, circular_repository(settings), submission_repository(settings), project_id, version, topic,
         )
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
@@ -412,22 +412,22 @@ async def _build_normalized_view(
     return view
 
 
-@app.get('/normalization/{project_id}/{version}/technical')
-async def normalization_technical(
+@app.get('/normalization/{project_id}/{version}/payment')
+async def normalization_payment(
     project_id: str, version: int,
     user: CurrentUser = Depends(get_current_user), creds: LlmCredentials = Depends(get_llm_credentials),
 ) -> NormalizedView:
-    """Tender technical requirements next to each approved bid's matched values, computed fresh."""
-    return await _build_normalized_view(creds, project_id, version, Topic.technical, user)
+    """The circular's payment compliance clauses next to each approved merchant's matched values, computed fresh."""
+    return await _build_normalized_view(creds, project_id, version, Topic.payment, user)
 
 
-@app.get('/normalization/{project_id}/{version}/price')
-async def normalization_price(
+@app.get('/normalization/{project_id}/{version}/service')
+async def normalization_service_view(
     project_id: str, version: int,
     user: CurrentUser = Depends(get_current_user), creds: LlmCredentials = Depends(get_llm_credentials),
 ) -> NormalizedView:
-    """Tender price line items next to each approved bid's matched values, computed fresh."""
-    return await _build_normalized_view(creds, project_id, version, Topic.price, user)
+    """The circular's service compliance clauses next to each approved merchant's matched values, computed fresh."""
+    return await _build_normalized_view(creds, project_id, version, Topic.service, user)
 
 
 @app.get('/normalization/{project_id}/{version}/export')
@@ -435,16 +435,16 @@ async def normalization_export(
     project_id: str, version: int,
     user: CurrentUser = Depends(get_current_user), creds: LlmCredentials = Depends(get_llm_credentials),
 ) -> StreamingResponse:
-    """Export both the Technical and Price comparison views as a single .xlsx workbook."""
+    """Export both the Payment and Service compliance views as a single .xlsx workbook."""
     await _ensure_project_access(project_id, user)
     views: list[NormalizedView] = []
-    for topic in (Topic.technical, Topic.price):
+    for topic in (Topic.payment, Topic.service):
         try:
             views.append(await _build_normalized_view(creds, project_id, version, topic, user))
         except HTTPException:
             continue  # skip a topic that isn't approved/available yet; export whatever is ready
     if not views:
-        raise HTTPException(422, 'Neither technical nor price sections are approved yet for this project/version')
+        raise HTTPException(422, 'Neither payment nor service compliance sections are approved yet for this project/version')
 
     workbook_bytes = normalization_excel.build_workbook(views)
     filename = f'compliance-{project_id}-v{version}.xlsx'
@@ -457,12 +457,13 @@ async def normalization_export(
 
 @app.get('/normalization/prompts')
 async def normalization_prompts(user: CurrentUser = Depends(get_current_user)) -> DefaultPrompts:
-    """The default prompts behind Technical/Price scoring and the cross-bid comparison step —
-    lets the compliance-matrix UI show a reviewer what will run before they choose to override it."""
+    """The default prompts behind Payment/Service compliance scoring and the cross-merchant
+    risk triage step — lets the compliance-matrix UI show a reviewer what will run before they
+    choose to override it."""
     return DefaultPrompts(
-        technical=normalization_score_client.DEFAULT_SYSTEM_PROMPT,
-        price=normalization_score_client.DEFAULT_SYSTEM_PROMPT,
-        comparison=normalization_compare_client.DEFAULT_SYSTEM_PROMPT,
+        payment=normalization_score_client.DEFAULT_SYSTEM_PROMPT,
+        service=normalization_score_client.DEFAULT_SYSTEM_PROMPT,
+        triage=normalization_triage_client.DEFAULT_SYSTEM_PROMPT,
     )
 
 
@@ -472,11 +473,12 @@ async def normalization_score(
     body: PromptOverride | None = None,
     user: CurrentUser = Depends(get_current_user), creds: LlmCredentials = Depends(get_llm_credentials),
 ) -> SectionScoreResult:
-    """Ask an LLM to holistically score every approved bidder's whole technical or price
-    section against the tender, with reasoning per bidder and a comparative narrative across
-    all of them. Cached the same way as the normalized view — see llm_result_cache — unless a
-    custom prompt override is given, in which case the result is computed fresh and not cached,
-    since it's no longer a pure function of the approved section content alone."""
+    """Ask an LLM to holistically score every approved merchant's whole payment or service
+    compliance section against the circular, with reasoning per merchant and a comparative
+    narrative across all of them. Cached the same way as the normalized view — see
+    llm_result_cache — unless a custom prompt override is given, in which case the result is
+    computed fresh and not cached, since it's no longer a pure function of the approved
+    section content alone."""
     await _ensure_project_access(project_id, user)
     settings = get_settings()
     custom_prompt = (body.prompt or '').strip() if body else ''
@@ -494,25 +496,25 @@ async def normalization_score(
     return result
 
 
-@app.post('/normalization/{project_id}/{version}/compare')
-async def normalization_compare(
+@app.post('/normalization/{project_id}/{version}/triage')
+async def normalization_triage(
     project_id: str, version: int,
     body: PromptOverride | None = None,
     user: CurrentUser = Depends(get_current_user), creds: LlmCredentials = Depends(get_llm_credentials),
-) -> ComparisonResult:
-    """Detailed overall comparison across BOTH technical and price sections together: an
-    extended pros/cons/precautions assessment per bidder plus one recommended award. Whichever
-    section(s) are approved so far are used; a topic that isn't approved yet is simply left out
-    rather than failing the whole request. Cached — see llm_result_cache — same as the other
-    normalization results, unless a custom prompt override is given, in which case the result
-    is computed fresh and not cached."""
+) -> RiskTriageResult:
+    """Risk triage across BOTH payment and service compliance sections together: a per-merchant
+    risk assessment (risk level, compliance score, key gaps, remediation priorities) plus an
+    audit-priority ranking across all merchants. Whichever section(s) are approved so far are
+    used; a topic that isn't approved yet is simply left out rather than failing the whole
+    request. Cached — see llm_result_cache — same as the other normalization results, unless a
+    custom prompt override is given, in which case the result is computed fresh and not cached."""
     await _ensure_project_access(project_id, user)
     settings = get_settings()
     custom_prompt = (body.prompt or '').strip() if body else ''
     if not custom_prompt:
-        cached = await llm_result_cache.get_cached(settings, project_id, version, 'compare')
+        cached = await llm_result_cache.get_cached(settings, project_id, version, 'triage')
         if cached is not None:
-            return ComparisonResult.model_validate(cached)
+            return RiskTriageResult.model_validate(cached)
 
     async def _try_view(topic: Topic) -> NormalizedView | None:
         try:
@@ -520,17 +522,17 @@ async def normalization_compare(
         except HTTPException:
             return None
 
-    technical_view, price_view = await _try_view(Topic.technical), await _try_view(Topic.price)
-    if technical_view is None and price_view is None:
-        raise HTTPException(422, 'Neither technical nor price sections are approved yet for this project/version')
+    payment_view, service_view = await _try_view(Topic.payment), await _try_view(Topic.service)
+    if payment_view is None and service_view is None:
+        raise HTTPException(422, 'Neither payment nor service compliance sections are approved yet for this project/version')
     try:
-        result = await normalization_compare_client.compare_bids(
-            creds, project_id, version, technical_view, price_view, custom_prompt or None,
+        result = await normalization_triage_client.triage_merchants(
+            creds, project_id, version, payment_view, service_view, custom_prompt or None,
         )
     except Exception as exc:  # noqa: BLE001 — model output failures happen; give a retryable 502, not a 500
-        raise HTTPException(502, 'The model failed to produce a valid comparison — try again.') from exc
+        raise HTTPException(502, 'The model failed to produce a valid risk triage — try again.') from exc
     if not custom_prompt:
-        await llm_result_cache.save_cached(settings, project_id, version, 'compare', result.model_dump(mode='json'))
+        await llm_result_cache.save_cached(settings, project_id, version, 'triage', result.model_dump(mode='json'))
     return result
 
 
@@ -539,11 +541,11 @@ async def normalization_matrix(
     project_id: str, version: int,
     user: CurrentUser = Depends(get_current_user), creds: LlmCredentials = Depends(get_llm_credentials),
 ) -> MatrixData:
-    """Technical + price compliance matrix: each requirement row judged compliant/partial/
-    non-compliant per bidder by an LLM, built on top of the on-demand normalized view.
+    """Payment + service compliance matrix: each requirement clause judged compliant/partial/
+    non-compliant per merchant by an LLM, built on top of the on-demand normalized view.
 
-    Building this runs dozens of LLM calls (row/header alignment plus a judgment per row), so
-    the result is cached — see llm_result_cache — and only recomputed once a section is
+    Building this runs dozens of LLM calls (row/header alignment plus a judgment per clause),
+    so the result is cached — see llm_result_cache — and only recomputed once a section is
     (re)approved or corrected for this project/version."""
     await _ensure_project_access(project_id, user)
     settings = get_settings()
@@ -552,7 +554,7 @@ async def normalization_matrix(
         return MatrixData.model_validate(cached)
     try:
         matrix = await compliance_service.build_matrix(
-            creds, tender_repository(settings), bid_repository(settings), project_id, version,
+            creds, circular_repository(settings), submission_repository(settings), project_id, version,
         )
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
@@ -633,7 +635,7 @@ async def delete_project(project_id: str, _admin: CurrentUser = Depends(require_
 async def list_project_files(
     project_id: str, user: CurrentUser = Depends(get_current_user)
 ) -> list[ProjectFileRecord]:
-    """Every file_repository row for a project (tender + all bids, every version). Backs the
+    """Every file_repository row for a project (circular + all submissions, every version). Backs the
     frontend's document lists (Workspace, Ops) — reviewers are scoped to their assigned project."""
     await _ensure_project_access(project_id, user)
     rows = await PostgresRepository(get_settings()).list_files(project_id)
@@ -649,9 +651,10 @@ async def upload_project_files(
     _admin: CurrentUser = Depends(require_admin),
 ) -> list[ProjectFileRecord]:
     """
-    Upload one or more PDFs directly (tender or bid — chosen explicitly, not filename-guessed)
-    without going through Gmail. `new_version` starts a fresh version (new Drive subfolder);
-    otherwise the files are added into the current version, reusing its existing Drive folder.
+    Upload one or more PDFs directly (circular or submission — chosen explicitly, not
+    filename-guessed) without going through Gmail. `new_version` starts a fresh version (new
+    Drive subfolder); otherwise the files are added into the current version, reusing its
+    existing Drive folder.
     """
     if not files:
         raise HTTPException(422, 'No files provided')
@@ -708,7 +711,7 @@ async def upload_project_files(
 async def update_project_file_type(
     project_id: str, file_id: str, body: FileTypeUpdate, _admin: CurrentUser = Depends(require_admin)
 ) -> ProjectFileRecord:
-    """Correct a file's tender/bid classification after upload."""
+    """Correct a file's circular/submission classification after upload."""
     settings = get_settings()
     repository = PostgresRepository(settings)
     file = await repository.get_file(file_id)
@@ -717,7 +720,7 @@ async def update_project_file_type(
     row = await repository.update_file_type(file_id, body.file_type.value)
     assert row is not None
     # update_file_type may have just dropped this file's evaluation under its old
-    # classification — any cached view/score/compare/matrix for this project/version could
+    # classification — any cached view/score/triage/matrix for this project/version could
     # have been built from that now-gone row.
     await llm_result_cache.invalidate(settings, project_id, row['version'])
     return _to_file_record(row)
@@ -802,10 +805,10 @@ async def get_file_stage_detail(
     file = await _get_owned_file(project_id, file_id, user)
     settings = get_settings()
     evaluation = None
-    if file['file_type'] == FileType.tender.value:
-        evaluation = await tender_repository(settings).get_evaluation_by_file(file_id)
-    elif file['file_type'] == FileType.bid.value:
-        evaluation = await bid_repository(settings).get_evaluation_by_file(file_id)
+    if file['file_type'] == FileType.circular.value:
+        evaluation = await circular_repository(settings).get_evaluation_by_file(file_id)
+    elif file['file_type'] == FileType.submission.value:
+        evaluation = await submission_repository(settings).get_evaluation_by_file(file_id)
     return build_file_stage_detail(file, evaluation)
 
 
@@ -829,8 +832,8 @@ async def retry_file_stage(
     try:
         if file['processing_status'] == 'PARSE_FAILED':
             await retry_parse_file(settings, file_id, creds)
-        elif file['file_type'] in (FileType.tender.value, FileType.bid.value):
-            repository = tender_repository(settings) if file['file_type'] == FileType.tender.value else bid_repository(settings)
+        elif file['file_type'] in (FileType.circular.value, FileType.submission.value):
+            repository = circular_repository(settings) if file['file_type'] == FileType.circular.value else submission_repository(settings)
             await retry_evaluation_file(creds, settings, repository, file_id)
         else:
             raise ValueError('Nothing to retry for this file')

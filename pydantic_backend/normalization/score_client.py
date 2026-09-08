@@ -1,16 +1,16 @@
 """
-Asks an LLM to holistically score each bidder's entire section (technical or price) against
-the tender, with individual reasoning plus one comparative narrative across all bidders —
-same pydantic-ai agent call-shape as `evaluation/compliance_client.py`.
+Asks an LLM to holistically score each merchant's entire section (payment or service
+compliance) against the circular, with individual reasoning plus one comparative narrative
+across all merchants — same pydantic-ai agent call-shape as `evaluation/compliance_client.py`.
 
-Unlike `compliance_service.judge_row` (per-row compliant/partial/non-compliant), this looks at
-the whole normalized view at once, so the model can weigh trade-offs across rows and rank
-bidders relative to each other, not just clause-by-clause. Nothing here is persisted — computed
-fresh per request, same as the rest of `normalization/`.
+Unlike `compliance_service.judge_row` (per-clause compliant/partial/non-compliant), this looks
+at the whole normalized view at once, so the model can weigh trade-offs across clauses and rank
+merchants relative to each other, not just clause-by-clause. Nothing here is persisted —
+computed fresh per request, same as the rest of `normalization/`.
 
 Uses max_tokens=4096 + reasoning_effort='low': reasoning models (e.g. gpt-oss) spend tokens on
-hidden reasoning before the JSON body, and a whole-section prompt (multiple bidders, many rows)
-needs enough budget that the reasoning doesn't crowd out the actual answer.
+hidden reasoning before the JSON body, and a whole-section prompt (multiple merchants, many
+clauses) needs enough budget that the reasoning doesn't crowd out the actual answer.
 """
 from __future__ import annotations
 
@@ -21,14 +21,18 @@ from ..llm_credentials import LlmCredentials
 from .models import BidScore, NormalizedView, SectionScoreResult
 
 DEFAULT_SYSTEM_PROMPT = (
-    'You are a procurement evaluator. You are given a tender\'s requirement rows for one section '
-    '(technical or price/commercial), and every bidder\'s matched responses across all of those '
-    'rows. Score EACH bidder\'s section holistically from 0-100, weighing completeness, quality, '
-    'and compliance across every row together — not just a row-by-row average. Then write one '
-    '"comparison" paragraph that explicitly compares the bidders against each other and explains '
-    'why one scored higher or lower than another (cite concrete differences in their responses). '
-    'Only score bidders explicitly given — never invent one. '
-    'Reply with exactly one score per bidder given.'
+    'You are an NPCI compliance assessor. You are given the regulator\'s checklist clauses for '
+    'one section (payment compliance or service compliance), and every merchant\'s matched '
+    'self-certified responses across all of those clauses. Score EACH merchant\'s section '
+    'holistically from 0-100 as a compliance score (100 = fully compliant with supporting '
+    'evidence; deduct for gaps, missing attestations, unverified self-attested claims, breached '
+    'thresholds/TATs, and overdue remediations) — not just a clause-by-clause average. Then '
+    'write one "comparison" paragraph that explicitly compares the merchants\' compliance '
+    'postures against each other and explains why one scored higher or lower than another '
+    '(cite concrete differences in their responses). '
+    'Only score merchants explicitly given — never invent one. '
+    'Reply with exactly one score per merchant given, using the "bidder" field for the '
+    'merchant\'s name.'
 )
 
 
@@ -66,7 +70,7 @@ async def score_section(
     body_text, bidders = flatten_view(view)
     if not bidders:
         return SectionScoreResult(
-            project_id=view.project_id, version=view.version, topic=view.topic, scores=[], comparison='No approved bidder responses to score yet.',
+            project_id=view.project_id, version=view.version, topic=view.topic, scores=[], comparison='No approved merchant submissions to score yet.',
         )
 
     prompt = f'Section: {view.topic.value}\n\n{body_text}'

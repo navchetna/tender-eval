@@ -80,14 +80,14 @@ export default function EmployeesPage() {
               const employeeId = p.assigned_to as string;
               const files = await getProjectFiles(p.project_id);
               const currentFiles = files.filter((f) => f.version === p.current_version);
-              const [tenderEvals, bidEvals] =
+              const [circularEvals, submissionEvals] =
                 p.current_version > 0
                   ? await Promise.all([
-                      getEvaluationsByProject("tender", p.project_id, p.current_version),
-                      getEvaluationsByProject("bid", p.project_id, p.current_version),
+                      getEvaluationsByProject("circular", p.project_id, p.current_version),
+                      getEvaluationsByProject("submission", p.project_id, p.current_version),
                     ])
                   : [[], []];
-              const completed = isProjectCompleted(currentFiles, tenderEvals, bidEvals);
+              const completed = isProjectCompleted(currentFiles, circularEvals, submissionEvals);
               const bucket = counts[employeeId] ?? { assigned: 0, completed: 0, projects: [] };
               bucket.assigned += 1;
               if (completed) bucket.completed += 1;

@@ -1,4 +1,8 @@
-"""Data models for the on-demand normalized tender-vs-bid comparison view."""
+"""Data models for the on-demand normalized circular-vs-submissions comparison view.
+
+Structural field names (tender_*, bid_*, bidder) are kept from the original tender workload —
+they are plumbing shared with the frontend; here "tender" = the reference circular and
+"bid" = one merchant submission."""
 from __future__ import annotations
 
 from pydantic import BaseModel
@@ -22,7 +26,7 @@ class NormalizedView(BaseModel):
 
 
 class ComplianceCell(BaseModel):
-    """One bidder's LLM-judged compliance verdict for one requirement row."""
+    """One merchant's LLM-judged compliance verdict for one requirement clause."""
 
     s: str  # ok | warn | bad | none
     t: str  # short label, e.g. "Compliant" / "Partial" / "Non-compliant" / "No response"
@@ -31,28 +35,28 @@ class ComplianceCell(BaseModel):
 
 
 class MatrixData(BaseModel):
-    """Compliance matrix for a project/version: technical + price rows banded together,
-    each row's cells judged by an LLM from the underlying normalized comparison view."""
+    """Compliance matrix for a project/version: payment + service compliance rows banded
+    together, each row's cells judged by an LLM from the underlying normalized comparison view."""
 
     project_id: str
     version: int
-    bidders: list[str]
+    bidders: list[str]  # merchant labels (field name kept for frontend plumbing compatibility)
     stale: list[str]
     rows: list[dict]  # {"band": str} band-header rows, or {"ref", "req", "cells": [ComplianceCell, ...]} data rows
 
 
 class BidScore(BaseModel):
-    """One bidder's holistic score for an entire section (all rows of one topic), with reasoning."""
+    """One merchant's holistic score for an entire section (all rows of one topic), with reasoning."""
 
-    bidder: str
+    bidder: str  # merchant label (field name kept for frontend plumbing compatibility)
     score: int  # 0-100
-    reasoning: str  # why this bidder scored this way, citing specifics from their responses
+    reasoning: str  # why this merchant scored this way, citing specifics from their responses
 
 
 class SectionScoreResult(BaseModel):
-    """LLM's independent scoring of every bidder's whole technical or price section, plus a
-    comparative narrative explaining why one bidder scored higher or lower than another.
-    Computed fresh on request — nothing persisted."""
+    """LLM's independent scoring of every merchant's whole payment or service compliance
+    section, plus a comparative narrative explaining why one merchant scored higher or lower
+    than another. Computed fresh on request — nothing persisted."""
 
     project_id: str
     version: int
@@ -61,30 +65,30 @@ class SectionScoreResult(BaseModel):
     comparison: str
 
 
-class BidAssessment(BaseModel):
-    """One bidder's extended overall assessment across both technical and price sections."""
+class MerchantAssessment(BaseModel):
+    """One merchant's risk assessment across both payment and service compliance sections."""
 
-    bidder: str
-    score: int  # 0-100, overall across whatever sections were available
-    pros: list[str]
-    cons: list[str]
-    precautions: list[str]  # risks/caveats to watch before awarding to this bidder
+    merchant: str
+    risk_level: str  # 'high' | 'medium' | 'low'
+    score: int  # 0-100 compliance score, overall across whatever sections were available
+    key_gaps: list[str]  # specific compliance gaps, citing clause references
+    remediation_priorities: list[str]  # ordered remediation actions, most urgent first
 
 
-class ComparisonResult(BaseModel):
-    """LLM's detailed overall comparison across technical + price together: an extended
-    pros/cons/precautions assessment per bidder plus one overall recommendation. Computed
-    fresh on request — nothing persisted."""
+class RiskTriageResult(BaseModel):
+    """LLM's risk triage across payment + service compliance together: a per-merchant risk
+    assessment plus an audit-priority ranking across all merchants ("who needs audit attention
+    first"). Computed fresh on request — nothing persisted."""
 
     project_id: str
     version: int
-    assessments: list[BidAssessment]
-    recommended_bidder: str | None
-    recommendation: str
+    assessments: list[MerchantAssessment]
+    audit_priority_order: list[str]  # every merchant exactly once, most audit-urgent first
+    summary: str  # triage narrative explaining the ranking
 
 
 class PromptOverride(BaseModel):
-    """Optional request body for the score/compare endpoints: a blank or omitted prompt runs
+    """Optional request body for the score/triage endpoints: a blank or omitted prompt runs
     (and caches) the default; a non-blank prompt replaces the system prompt for that one
     request and is never cached, since the result is no longer a pure function of the
     approved section content alone."""
@@ -93,10 +97,10 @@ class PromptOverride(BaseModel):
 
 
 class DefaultPrompts(BaseModel):
-    """The default system prompts behind the Technical/Price scoring and the cross-bid
-    comparison step, so the compliance-matrix UI can show what will run before a reviewer
-    chooses to override it."""
+    """The default system prompts behind the Payment/Service compliance scoring and the
+    cross-merchant risk triage step, so the compliance-matrix UI can show what will run
+    before a reviewer chooses to override it."""
 
-    technical: str
-    price: str
-    comparison: str
+    payment: str
+    service: str
+    triage: str

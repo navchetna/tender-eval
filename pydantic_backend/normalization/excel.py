@@ -10,8 +10,8 @@ from openpyxl.utils import get_column_letter
 from .models import NormalizedView
 
 _SHEET_TITLES = {
-    'technical': 'Technical Compliance',
-    'price': 'Price Compliance',
+    'payment': 'Payment Compliance',
+    'service': 'Service Compliance',
 }
 
 
@@ -34,7 +34,7 @@ def _write_sheet(workbook: Workbook, title: str, view: NormalizedView) -> None:
 
 
 def build_workbook(views: list[NormalizedView]) -> bytes:
-    """Build a workbook with one sheet per view (Technical Compliance / Price Compliance)."""
+    """Build a workbook with one sheet per view (Payment Compliance / Service Compliance)."""
     workbook = Workbook()
     workbook.remove(workbook.active)  # drop the default empty sheet
     for view in views:

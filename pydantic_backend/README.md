@@ -1,30 +1,30 @@
-# Tender-Bid Pipeline: Gmail → Drive → Postgres → Parsing → Evaluation
+# Merchant Compliance Pipeline: Gmail → Drive → Postgres → Parsing → Evaluation
 
 End-to-end pipeline, in the order it actually runs:
 
 ```text
-Gmail unread PDF email (1 tender + any number of bidder PDFs as attachments)
+Gmail unread PDF email (1 circular + any number of merchant PDFs as attachments)
   → Gmail OAuth (readonly + send + drive scopes)
   → validate `PROJECT-CODE: Project Name` subject
   → versioned Drive folder: "<code> - <name>" / "Version 00N - <datetime>"
   → upload every PDF to Drive, record each in Postgres (RECEIVED) — one row per file, so any
-    number of bidder PDFs in the same email are ingested independently
+    number of merchant PDFs in the same email are ingested independently
   → async PDF parser (docling) submits/polls/fetches markdown, output_tree.json, TOC, images
   → parsed artifacts uploaded to Drive (parsed_results/...), TOC text + tree links stored in Postgres (PARSED)
-  → LiteLLM gateway detects which TOC heading covers Technical Requirements vs Price/Commercial
-  → matching section content pulled from output_tree.json, stored in tender_evaluations / bid_evaluations (SUGGESTED)
+  → LiteLLM gateway detects which TOC heading covers Payment Compliance vs Service Compliance
+  → matching section content pulled from output_tree.json, stored in circular_evaluations / submission_evaluations (SUGGESTED)
   → an agent (pydantic-ai + LiteLLM) drafts and sends ONE reviewer notification email per
     project/version per processing run, covering every newly-suggested file in that run
   → human reviewer approves or corrects each topic, per file, via REST endpoints
-  → the normalization view merges the tender's approved sections with every approved bid's
+  → the normalization view merges the circular's approved sections with every approved submission's
     sections into one side-by-side comparison, computed on demand
 ```
 
-A project/version can have exactly one tender document and any number of bid documents —
-bid PDFs are matched to the tender purely by living in the same email/project/version;
-file names only need to contain `tender` or `bid` to be classified. If two attachments in
-the same email share an identical file name (e.g. two bidders both send `bid.pdf`), the
-pipeline automatically disambiguates them (`bid.pdf`, `bid (2).pdf`, ...) before upload/
+A project/version can have exactly one circular document and any number of submission documents —
+submission PDFs are matched to the circular purely by living in the same email/project/version;
+file names only need to contain `circular` or `submission` to be classified. If two attachments in
+the same email share an identical file name (e.g. two merchants both send `submission.pdf`), the
+pipeline automatically disambiguates them (`submission.pdf`, `submission (2).pdf`, ...) before upload/
 persistence so neither is dropped.
 
 ## One-time setup
@@ -65,7 +65,7 @@ curl -X POST http://localhost:8011/setup/database | jq
 ```
 
 Creates/recreates `projects`, `file_repository` (drops+recreates — safe only pre-launch),
-plus `employees` and `tender_evaluations` (left intact unless cascaded).
+plus `employees` and `circular_evaluations` (left intact unless cascaded).
 
 ### 2. Register at least one reviewer (employee)
 
@@ -79,7 +79,7 @@ Save the returned `employee_id` — needed later to approve/correct sections. `l
 required at creation (admins assign each employee their own enterprise agentic toolkit key,
 used to authenticate every LLM call they trigger) and is never returned by any endpoint.
 
-### 3. Poll Gmail for unread tender/bid PDFs and ingest them
+### 3. Poll Gmail for unread circular/submission PDFs and ingest them
 
 ```bash
 curl -X POST "http://localhost:8011/ingestion/poll-gmail?max_results=20" | jq
@@ -88,8 +88,8 @@ curl -X POST "http://localhost:8011/ingestion/poll-gmail?max_results=20" | jq
 For each new unread email matching `PROJECT-CODE: Project Name` with a PDF attachment:
 creates/updates the project, uploads the PDF to a versioned Drive folder, and inserts a
 `file_repository` row with `processing_status = RECEIVED`. Already-ingested emails are
-skipped silently. File name must contain `tender` or `bid` to be classified accordingly
-(only `tender` files go through section evaluation).
+skipped silently. File name must contain `circular` or `submission` to be classified accordingly
+(only `circular` files go through section evaluation).
 
 ### 4. Parse the received PDFs
 
@@ -105,90 +105,90 @@ in `parse_toc`, and stores Drive file ids/links in `parse_artifacts`.
 
 Can be called repeatedly/on a schedule — safe to re-run.
 
-### 5. Detect Technical/Price sections + notify the reviewer
+### 5. Detect Payment/Service sections + notify the reviewer
 
 ```bash
-curl -X POST http://localhost:8011/evaluation/tender/process-pending | jq
+curl -X POST http://localhost:8011/evaluation/circular/process-pending | jq
 ```
 
 For every `PARSED` file with `file_type = TENDER` and no evaluation yet: sends the TOC to
 the LiteLLM gateway (authenticated with the calling admin's own assigned key) to pick the
-Technical Requirements heading and the Price/Commercial heading, looks up each heading's
-full text in `output_tree.json`, and inserts a `tender_evaluations` row
+Payment Compliance heading and the Service Compliance heading, looks up each heading's
+full text in `output_tree.json`, and inserts a `circular_evaluations` row
 (`technical_status`/`price_status = SUGGESTED`). Once the whole claimed batch is detected,
 a pydantic-ai agent (LiteLLM-backed) drafts and sends ONE notification email per
 project/version to `REVIEWER_EMAIL` via a `send_reviewer_email` tool, summarizing every
-file that got a new suggestion in this run (there's normally just one tender per
-project/version, but the same batching applies to `/evaluation/bid/process-pending` below,
-where several bidder files processed together are covered by a single email).
+file that got a new suggestion in this run (there's normally just one circular per
+project/version, but the same batching applies to `/evaluation/submission/process-pending` below,
+where several merchant files processed together are covered by a single email).
 
 Returns the list of newly created `evaluation_id`s.
 
 ### 6. Resend the notification (if `REVIEWER_EMAIL` was unset, or you want to nudge again)
 
 ```bash
-curl -X POST http://localhost:8011/evaluation/tender/<evaluation_id>/notify | jq
+curl -X POST http://localhost:8011/evaluation/circular/<evaluation_id>/notify | jq
 ```
 
 ### 7. Inspect a suggestion
 
 ```bash
-curl http://localhost:8011/evaluation/tender/<evaluation_id> | jq
+curl http://localhost:8011/evaluation/circular/<evaluation_id> | jq
 ```
 
 Or list everything still awaiting a decision:
 
 ```bash
-curl http://localhost:8011/evaluation/tender/pending | jq
+curl http://localhost:8011/evaluation/circular/pending | jq
 ```
 
-### 8. Approve or correct each topic (technical / price)
+### 8. Approve or correct each topic (payment / service)
 
 Approve the AI suggestion as-is:
 
 ```bash
-curl -X POST http://localhost:8011/evaluation/tender/<evaluation_id>/review \
+curl -X POST http://localhost:8011/evaluation/circular/<evaluation_id>/review \
   -H "Content-Type: application/json" \
-  -d '{"topic": "technical", "employee_id": "<employee_id>"}' | jq
+  -d '{"topic": "payment", "employee_id": "<employee_id>"}' | jq
 ```
 
 Reject and replace with the correct TOC heading (copy it verbatim from `parse_toc` /
-`GET /evaluation/tender/<evaluation_id>`):
+`GET /evaluation/circular/<evaluation_id>`):
 
 ```bash
-curl -X POST http://localhost:8011/evaluation/tender/<evaluation_id>/review \
+curl -X POST http://localhost:8011/evaluation/circular/<evaluation_id>/review \
   -H "Content-Type: application/json" \
-  -d '{"topic": "price", "employee_id": "<employee_id>", "corrected_heading": "1.4 Price Bid Evaluation"}' | jq
+  -d '{"topic": "service", "employee_id": "<employee_id>", "corrected_heading": "1.4 Service Submission Evaluation"}' | jq
 ```
 
-Repeat for both `technical` and `price`. Once both `technical_status` and `price_status`
-read `APPROVED` in step 7, the tender document is fully validated.
+Repeat for both `payment` and `service`. Once both `technical_status` and `price_status`
+read `APPROVED` in step 7, the circular document is fully validated.
 
-### 9. Same flow for bid documents
+### 9. Same flow for submission documents
 
-Once bidders' PDFs (filename containing `bid`) have been ingested (step 3) and parsed
+Once merchants' PDFs (filename containing `submission`) have been ingested (step 3) and parsed
 (step 4), run the identical detection/notify/review flow against `file_type = BID` files
-under the `/evaluation/bid/...` routes — same request/response shapes as steps 5-8. A
-project/version can have any number of bid PDFs; `POST /evaluation/bid/process-pending`
+under the `/evaluation/submission/...` routes — same request/response shapes as steps 5-8. A
+project/version can have any number of submission PDFs; `POST /evaluation/submission/process-pending`
 claims and detects all of them in one call and sends a single batched reviewer email
-covering every bid processed in that run (rather than one email per bidder). Each bidder's
-PDF gets its own `bid_evaluations` row (and its own `evaluation_id`), so approve/correct
-each bidder independently via `/evaluation/bid/<evaluation_id>/review`:
+covering every submission processed in that run (rather than one email per merchant). Each merchant's
+PDF gets its own `submission_evaluations` row (and its own `evaluation_id`), so approve/correct
+each merchant independently via `/evaluation/submission/<evaluation_id>/review`:
 
 ```bash
-curl -X POST http://localhost:8011/evaluation/bid/process-pending | jq
-curl http://localhost:8011/evaluation/bid/pending | jq
-curl http://localhost:8011/evaluation/bid/<evaluation_id> | jq
-curl -X POST http://localhost:8011/evaluation/bid/<evaluation_id>/notify | jq
-curl -X POST http://localhost:8011/evaluation/bid/<evaluation_id>/review \
+curl -X POST http://localhost:8011/evaluation/submission/process-pending | jq
+curl http://localhost:8011/evaluation/submission/pending | jq
+curl http://localhost:8011/evaluation/submission/<evaluation_id> | jq
+curl -X POST http://localhost:8011/evaluation/submission/<evaluation_id>/notify | jq
+curl -X POST http://localhost:8011/evaluation/submission/<evaluation_id>/review \
   -H "Content-Type: application/json" \
-  -d '{"topic": "technical", "employee_id": "<employee_id>"}' | jq
+  -d '{"topic": "payment", "employee_id": "<employee_id>"}' | jq
 ```
 
-Each bid file gets its own row in `bid_evaluations`, linked to the same `project_id`/
-`version` as the tender, so the normalization view (see `/normalization/...` below) can
-compare every bidder's approved Technical/Price section content against the tender's
-approved sections, side by side, no matter how many bidders submitted.
+Each submission file gets its own row in `submission_evaluations`, linked to the same `project_id`/
+`version` as the circular, so the normalization view (see `/normalization/...` below) can
+compare every merchant's approved Payment/Service section content against the circular's
+approved sections, side by side, no matter how many merchants submitted.
 
 ## Reference: all endpoints
 
@@ -197,21 +197,21 @@ approved sections, side by side, no matter how many bidders submitted.
 | POST | `/setup/database` | Create/reset schema |
 | POST | `/ingestion/poll-gmail?max_results=N` | Fetch + ingest unread PDF emails |
 | POST | `/parsing/process-pending` | Parse received PDFs via the async parser |
-| POST | `/evaluation/tender/process-pending` | Tender: detect technical/price sections + notify reviewer |
-| GET | `/evaluation/tender/pending` | Tender: list evaluations awaiting review |
-| GET | `/evaluation/tender/{evaluation_id}` | Tender: get one evaluation's full detail |
-| POST | `/evaluation/tender/{evaluation_id}/notify` | Tender: resend the reviewer notification |
-| POST | `/evaluation/tender/{evaluation_id}/review` | Tender: approve or correct a technical/price section |
-| POST | `/evaluation/bid/process-pending` | Bid: detect technical/price sections + notify reviewer |
-| GET | `/evaluation/bid/pending` | Bid: list evaluations awaiting review |
-| GET | `/evaluation/bid/{evaluation_id}` | Bid: get one evaluation's full detail |
-| POST | `/evaluation/bid/{evaluation_id}/notify` | Bid: resend the reviewer notification |
-| POST | `/evaluation/bid/{evaluation_id}/review` | Bid: approve or correct a technical/price section |
+| POST | `/evaluation/circular/process-pending` | Circular: detect payment/service sections + notify reviewer |
+| GET | `/evaluation/circular/pending` | Circular: list evaluations awaiting review |
+| GET | `/evaluation/circular/{evaluation_id}` | Circular: get one evaluation's full detail |
+| POST | `/evaluation/circular/{evaluation_id}/notify` | Circular: resend the reviewer notification |
+| POST | `/evaluation/circular/{evaluation_id}/review` | Circular: approve or correct a payment/service section |
+| POST | `/evaluation/submission/process-pending` | Submission: detect payment/service sections + notify reviewer |
+| GET | `/evaluation/submission/pending` | Submission: list evaluations awaiting review |
+| GET | `/evaluation/submission/{evaluation_id}` | Submission: get one evaluation's full detail |
+| POST | `/evaluation/submission/{evaluation_id}/notify` | Submission: resend the reviewer notification |
+| POST | `/evaluation/submission/{evaluation_id}/review` | Submission: approve or correct a payment/service section |
 | POST | `/employees` | Register a reviewer (admin assigns name/email/password/LiteLLM key) |
 | GET | `/employees` | List reviewers (never includes the LiteLLM key) |
 | GET | `/health` | Liveness check |
 
-The bare `/evaluation/...` routes (without `/tender/`) still work and behave identically
-to `/evaluation/tender/...` — kept only for backward compatibility with earlier curl
-history. Prefer the `/evaluation/tender/...` form for anything new.
+The bare `/evaluation/...` routes (without `/circular/`) still work and behave identically
+to `/evaluation/circular/...` — kept only for backward compatibility with earlier curl
+history. Prefer the `/evaluation/circular/...` form for anything new.
 

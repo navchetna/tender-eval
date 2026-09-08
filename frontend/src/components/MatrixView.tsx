@@ -3,28 +3,28 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Download, Loader2, Sparkles, Terminal, Upload } from "lucide-react";
-import { ApiError, compareBids, exportMatrix, getDefaultPrompts, getNormalizedView, getProjects } from "@/lib/api";
-import type { ComparisonResult, DefaultPrompts, NormalizedView, Project, Topic } from "@/lib/types";
+import { ApiError, exportMatrix, getDefaultPrompts, getNormalizedView, getProjects, triageMerchants } from "@/lib/api";
+import type { DefaultPrompts, MerchantAssessment, NormalizedView, Project, RiskLevel, RiskTriageResult, Topic } from "@/lib/types";
 import { Card } from "@/components/ui/Card";
 import { Empty } from "@/components/ui/Empty";
 import { toneClasses } from "@/lib/tone";
 import { useReportActiveStage } from "@/lib/activeStageContext";
 
-type Tab = "technical" | "price" | "comparison";
+type Tab = "payment" | "service" | "triage";
 
 const TABS: { key: Tab; label: string }[] = [
-  { key: "technical", label: "Technical compliance" },
-  { key: "price", label: "Price compliance" },
-  { key: "comparison", label: "Detailed comparison" },
+  { key: "payment", label: "Payment compliance" },
+  { key: "service", label: "Service compliance" },
+  { key: "triage", label: "Risk triage" },
 ];
 
-interface BidderGroup {
+interface MerchantGroup {
   bidder: string;
   fields: { col: string; field: string }[];
 }
 
-function groupBidColumns(bidColumns: string[]): BidderGroup[] {
-  const groups: BidderGroup[] = [];
+function groupSubmissionColumns(bidColumns: string[]): MerchantGroup[] {
+  const groups: MerchantGroup[] = [];
   for (const col of bidColumns) {
     const idx = col.indexOf(": ");
     const bidder = idx === -1 ? col : col.slice(0, idx);
@@ -39,39 +39,10 @@ function groupBidColumns(bidColumns: string[]): BidderGroup[] {
   return groups;
 }
 
-function parseNumber(value: string | null | undefined): number | null {
-  if (!value) return null;
-  const cleaned = value.replace(/[^0-9.\-]/g, "");
-  if (!cleaned) return null;
-  const n = parseFloat(cleaned);
-  return Number.isFinite(n) ? n : null;
-}
-
-/** Cols (bidder: field keys) holding the lowest numeric value per field-name, when 2+ bidders report a number for it. */
-function computeLowestCostCols(row: NormalizedView["rows"][number], bidderGroups: BidderGroup[]): Set<string> {
-  const byField = new Map<string, { col: string; value: number }[]>();
-  for (const g of bidderGroups) {
-    for (const { col, field } of g.fields) {
-      const num = parseNumber(row.bid_values[col]);
-      if (num === null) continue;
-      const arr = byField.get(field) ?? [];
-      arr.push({ col, value: num });
-      byField.set(field, arr);
-    }
-  }
-  const lowest = new Set<string>();
-  for (const entries of byField.values()) {
-    if (entries.length < 2) continue;
-    const min = Math.min(...entries.map((e) => e.value));
-    for (const e of entries) if (e.value === min) lowest.add(e.col);
-  }
-  return lowest;
-}
-
-function NormalizedTable({ view, highlightLowestCost }: { view: NormalizedView; highlightLowestCost?: boolean }) {
-  const bidderGroups = groupBidColumns(view.bid_columns);
+function NormalizedTable({ view }: { view: NormalizedView }) {
+  const merchantGroups = groupSubmissionColumns(view.bid_columns);
   if (view.rows.length === 0) {
-    return <Empty>No rows found in the tender&apos;s parsed table for this section.</Empty>;
+    return <Empty>No rows found in the circular&apos;s parsed table for this section.</Empty>;
   }
   return (
     <div className="overflow-x-auto rounded-[13px] border-[0.5px] border-line shadow-[0_1px_2px_rgba(30,28,24,.04)]">
@@ -87,7 +58,7 @@ function NormalizedTable({ view, highlightLowestCost }: { view: NormalizedView; 
                 {col}
               </th>
             ))}
-            {bidderGroups.map((g) => (
+            {merchantGroups.map((g) => (
               <th
                 key={g.bidder}
                 colSpan={g.fields.length}
@@ -98,7 +69,7 @@ function NormalizedTable({ view, highlightLowestCost }: { view: NormalizedView; 
             ))}
           </tr>
           <tr className="bg-surface2">
-            {bidderGroups.map((g) =>
+            {merchantGroups.map((g) =>
               g.fields.map(({ col, field }) => (
                 <th
                   key={col}
@@ -111,30 +82,25 @@ function NormalizedTable({ view, highlightLowestCost }: { view: NormalizedView; 
           </tr>
         </thead>
         <tbody>
-          {view.rows.map((row, i) => {
-            const lowestCols = highlightLowestCost ? computeLowestCostCols(row, bidderGroups) : new Set<string>();
-            return (
-              <tr key={i} className="border-t-[0.5px] border-line">
-                {view.tender_columns.map((col) => (
-                  <td key={col} className="sticky left-0 min-w-[160px] border-b-[0.5px] border-line bg-surface px-[14px] py-[10px] align-top text-[12.5px] text-ink">
-                    {row.tender_cells[col] || <span className="text-ink-faint">—</span>}
+          {view.rows.map((row, i) => (
+            <tr key={i} className="border-t-[0.5px] border-line">
+              {view.tender_columns.map((col) => (
+                <td key={col} className="sticky left-0 min-w-[160px] border-b-[0.5px] border-line bg-surface px-[14px] py-[10px] align-top text-[12.5px] text-ink">
+                  {row.tender_cells[col] || <span className="text-ink-faint">—</span>}
+                </td>
+              ))}
+              {merchantGroups.map((g) =>
+                g.fields.map(({ col }) => (
+                  <td
+                    key={col}
+                    className="border-b-[0.5px] border-l-[0.5px] border-line px-[14px] py-[10px] align-top text-[12.5px] text-ink-soft"
+                  >
+                    {row.bid_values[col] || <span className="text-ink-faint italic">no response</span>}
                   </td>
-                ))}
-                {bidderGroups.map((g) =>
-                  g.fields.map(({ col }) => (
-                    <td
-                      key={col}
-                      className={`border-b-[0.5px] border-l-[0.5px] border-line px-[14px] py-[10px] align-top text-[12.5px] text-ink-soft ${
-                        lowestCols.has(col) ? "bg-ok-bg" : ""
-                      }`}
-                    >
-                      {row.bid_values[col] || <span className="text-ink-faint italic">no response</span>}
-                    </td>
-                  ))
-                )}
-              </tr>
-            );
-          })}
+                ))
+              )}
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
@@ -159,6 +125,12 @@ function scoreTone(score: number): "ok" | "warn" | "bad" {
   if (score >= 50) return "warn";
   return "bad";
 }
+
+const RISK_TONE: Record<RiskLevel, "ok" | "warn" | "bad"> = {
+  high: "bad",
+  medium: "warn",
+  low: "ok",
+};
 
 /** Shows the exact prompt an evaluation/scoring step will use, and lets a reviewer either run
 it as-is or override it with their own wording for that one run — never silently guessing on
@@ -234,7 +206,7 @@ function PromptControl({
               <span className="text-[12px] font-medium text-ink-soft">Extract scoring rules from a document</span>
               <div className="flex cursor-not-allowed items-center gap-[8px] rounded-[9px] border-[1.5px] border-dashed border-line-strong bg-surface2 px-3 py-[10px] text-[12px] text-ink-faint opacity-70">
                 <Upload size={14} className="shrink-0" />
-                <span>Upload a tender/RFP so the model can derive its scoring rules from it — coming soon</span>
+                <span>Upload a compliance circular so the model can derive its scoring rules from it — coming soon</span>
               </div>
             </div>
 
@@ -262,68 +234,67 @@ function PromptControl({
   );
 }
 
-function ComparisonPanel({ result }: { result: ComparisonResult }) {
+function TriagePanel({ result }: { result: RiskTriageResult }) {
   if (result.assessments.length === 0) {
-    return <Empty>No approved bidder responses to compare yet.</Empty>;
+    return <Empty>No approved merchant submissions to triage yet.</Empty>;
   }
+  // Cards follow the model's audit-priority ranking; any assessment the ranking missed
+  // still gets shown, appended after the ranked ones.
+  const ranked = result.audit_priority_order
+    .map((merchant) => result.assessments.find((a) => a.merchant === merchant))
+    .filter((a): a is MerchantAssessment => a != null);
+  const unranked = result.assessments.filter((a) => !ranked.includes(a));
+  const ordered = [...ranked, ...unranked];
   return (
     <div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-[12px]">
-        {result.assessments.map((a) => {
-          const tn = toneClasses[scoreTone(a.score)];
-          const isRecommended = a.bidder === result.recommended_bidder;
+        {ordered.map((a, i) => {
+          const scoreTn = toneClasses[scoreTone(a.score)];
+          const riskTn = toneClasses[RISK_TONE[a.risk_level]];
           return (
-            <Card
-              key={a.bidder}
-              className={`p-[15px] ${isRecommended ? "border-[1.5px] border-ok-dot bg-ok-bg/40" : ""}`}
-            >
+            <Card key={a.merchant} className="p-[15px]">
               <div className="mb-[8px] flex items-center justify-between gap-2">
-                <span className="truncate text-[14px] font-semibold text-ink">{a.bidder}</span>
-                <div className="flex items-center gap-[6px]">
-                  {isRecommended && (
-                    <span className="rounded-full bg-ok-dot px-[8px] py-[2px] text-[10.5px] font-semibold text-white">Recommended</span>
-                  )}
-                  <span className={`shrink-0 rounded-full px-2 py-[2px] text-[12px] font-semibold ${tn.bg} ${tn.fg}`}>{a.score}/100</span>
+                <div className="flex min-w-0 items-center gap-[7px]">
+                  <span className="shrink-0 rounded-full bg-surface2 px-[8px] py-[2px] text-[10.5px] font-semibold text-ink-soft">
+                    #{i + 1} audit priority
+                  </span>
+                  <span className="truncate text-[14px] font-semibold text-ink">{a.merchant}</span>
+                </div>
+                <div className="flex shrink-0 items-center gap-[6px]">
+                  <span className={`rounded-full px-2 py-[2px] text-[10.5px] font-semibold uppercase ${riskTn.bg} ${riskTn.fg}`}>
+                    {a.risk_level} risk
+                  </span>
+                  <span className={`rounded-full px-2 py-[2px] text-[12px] font-semibold ${scoreTn.bg} ${scoreTn.fg}`}>{a.score}/100</span>
                 </div>
               </div>
-              {a.pros.length > 0 && (
+              {a.key_gaps.length > 0 && (
                 <div className="mb-[8px]">
-                  <div className="mb-[3px] text-[10.5px] font-semibold tracking-[0.3px] text-ok-fg uppercase">Pros</div>
+                  <div className="mb-[3px] text-[10.5px] font-semibold tracking-[0.3px] text-bad-fg uppercase">Key gaps</div>
                   <ul className="list-disc space-y-[2px] pl-[16px] text-[12px] leading-[1.4] text-ink-soft">
-                    {a.pros.map((p, i) => (
-                      <li key={i}>{p}</li>
+                    {a.key_gaps.map((g, j) => (
+                      <li key={j}>{g}</li>
                     ))}
                   </ul>
                 </div>
               )}
-              {a.cons.length > 0 && (
-                <div className="mb-[8px]">
-                  <div className="mb-[3px] text-[10.5px] font-semibold tracking-[0.3px] text-bad-fg uppercase">Cons</div>
-                  <ul className="list-disc space-y-[2px] pl-[16px] text-[12px] leading-[1.4] text-ink-soft">
-                    {a.cons.map((c, i) => (
-                      <li key={i}>{c}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {a.precautions.length > 0 && (
+              {a.remediation_priorities.length > 0 && (
                 <div>
-                  <div className="mb-[3px] text-[10.5px] font-semibold tracking-[0.3px] text-warn-fg uppercase">Precautions</div>
-                  <ul className="list-disc space-y-[2px] pl-[16px] text-[12px] leading-[1.4] text-ink-soft">
-                    {a.precautions.map((p, i) => (
-                      <li key={i}>{p}</li>
+                  <div className="mb-[3px] text-[10.5px] font-semibold tracking-[0.3px] text-warn-fg uppercase">Remediation priorities</div>
+                  <ol className="list-decimal space-y-[2px] pl-[16px] text-[12px] leading-[1.4] text-ink-soft">
+                    {a.remediation_priorities.map((p, j) => (
+                      <li key={j}>{p}</li>
                     ))}
-                  </ul>
+                  </ol>
                 </div>
               )}
             </Card>
           );
         })}
       </div>
-      {result.recommendation && (
+      {result.summary && (
         <Card className="mt-[12px] p-[15px]">
-          <div className="mb-[5px] text-[11px] tracking-[0.3px] text-ink-faint uppercase">Overall recommendation</div>
-          <div className="font-serif text-[13.5px] leading-[1.6] text-ink-soft">{result.recommendation}</div>
+          <div className="mb-[5px] text-[11px] tracking-[0.3px] text-ink-faint uppercase">Audit priority summary</div>
+          <div className="font-serif text-[13.5px] leading-[1.6] text-ink-soft">{result.summary}</div>
         </Card>
       )}
     </div>
@@ -335,13 +306,13 @@ export function MatrixView({ projectId }: { projectId: string }) {
 
   const [project, setProject] = useState<Project | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("comparison");
+  const [tab, setTab] = useState<Tab>("triage");
   const [views, setViews] = useState<Partial<Record<Topic, NormalizedView>>>({});
   const [viewErrors, setViewErrors] = useState<Partial<Record<Topic, string>>>({});
   const [loadingView, setLoadingView] = useState<Partial<Record<Topic, boolean>>>({});
-  const [comparison, setComparison] = useState<ComparisonResult | null>(null);
-  const [comparing, setComparing] = useState(false);
-  const [comparisonError, setComparisonError] = useState<string | null>(null);
+  const [triage, setTriage] = useState<RiskTriageResult | null>(null);
+  const [triaging, setTriaging] = useState(false);
+  const [triageError, setTriageError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [defaultPrompts, setDefaultPrompts] = useState<DefaultPrompts | null>(null);
 
@@ -382,7 +353,7 @@ export function MatrixView({ projectId }: { projectId: string }) {
       setViews((prev) => ({ ...prev, [topic]: view }));
       return view;
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : "Failed to load comparison view";
+      const message = err instanceof ApiError ? err.message : "Failed to load compliance view";
       setViewErrors((prev) => ({ ...prev, [topic]: message }));
       return null;
     } finally {
@@ -395,9 +366,9 @@ export function MatrixView({ projectId }: { projectId: string }) {
   // it otherwise, so this always ends in the data being shown without user interaction.
   useEffect(() => {
     if (!project) return;
-    loadView("technical");
-    loadView("price");
-    onCompare();
+    loadView("payment");
+    loadView("service");
+    onTriage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project]);
 
@@ -413,17 +384,17 @@ export function MatrixView({ projectId }: { projectId: string }) {
     }
   };
 
-  const onCompare = async (promptOverride?: string) => {
+  const onTriage = async (promptOverride?: string) => {
     if (!project) return;
-    setComparing(true);
-    setComparisonError(null);
+    setTriaging(true);
+    setTriageError(null);
     try {
-      const result = await compareBids(projectId, project.current_version, promptOverride);
-      setComparison(result);
+      const result = await triageMerchants(projectId, project.current_version, promptOverride);
+      setTriage(result);
     } catch (err) {
-      setComparisonError(err instanceof ApiError ? err.message : "Comparison failed");
+      setTriageError(err instanceof ApiError ? err.message : "Risk triage failed");
     } finally {
-      setComparing(false);
+      setTriaging(false);
     }
   };
 
@@ -482,7 +453,7 @@ export function MatrixView({ projectId }: { projectId: string }) {
         ))}
       </div>
 
-      {(tab === "technical" || tab === "price") &&
+      {(tab === "payment" || tab === "service") &&
         (() => {
           const topic = tab as Topic;
           const view = views[topic];
@@ -497,17 +468,11 @@ export function MatrixView({ projectId }: { projectId: string }) {
                 </div>
               )}
               {!view && !viewError && (
-                <Empty>Aligning bid responses against the tender&apos;s {tab} table — this can take a little while.</Empty>
+                <Empty>Aligning merchant responses against the circular&apos;s {tab} compliance table — this can take a little while.</Empty>
               )}
               {view && (
                 <>
                   <div className="mb-[10px] flex items-center justify-between">
-                    {tab === "price" && (
-                      <div className="flex items-center gap-[6px] text-[12px] text-ink-soft">
-                        <span className="inline-block h-[10px] w-[10px] rounded-[3px] bg-ok-bg" />
-                        Lowest cost for that line item
-                      </div>
-                    )}
                     <button
                       onClick={() => loadView(topic)}
                       disabled={isLoading}
@@ -517,36 +482,36 @@ export function MatrixView({ projectId }: { projectId: string }) {
                       {isLoading ? "Reloading…" : "Reload"}
                     </button>
                   </div>
-                  <NormalizedTable view={view} highlightLowestCost={tab === "price"} />
+                  <NormalizedTable view={view} />
                 </>
               )}
             </div>
           );
         })()}
 
-      {tab === "comparison" && (
+      {tab === "triage" && (
         <div>
-          {!comparison && comparisonError && !comparing && (
+          {!triage && triageError && !triaging && (
             <div className="flex flex-col items-start gap-[10px]">
-              <div className="rounded-[9px] bg-bad-bg px-3 py-2 text-[12.5px] text-bad-fg">{comparisonError}</div>
-              <LoadDataButton label="Retry" loading={comparing} onClick={() => onCompare()} />
+              <div className="rounded-[9px] bg-bad-bg px-3 py-2 text-[12.5px] text-bad-fg">{triageError}</div>
+              <LoadDataButton label="Retry" loading={triaging} onClick={() => onTriage()} />
             </div>
           )}
-          {!comparison && !comparisonError && (
-            <Empty>Weighing pros, cons, and precautions across every bidder — this can take a little while.</Empty>
+          {!triage && !triageError && (
+            <Empty>Ranking merchants by compliance risk — this can take a little while.</Empty>
           )}
-          {comparison && !comparing && (
+          {triage && !triaging && (
             <>
               <div className="mb-[12px] flex justify-end">
                 <PromptControl
-                  title="Detailed comparison prompt"
-                  defaultPrompt={defaultPrompts?.comparison}
-                  running={comparing}
+                  title="Risk triage prompt"
+                  defaultPrompt={defaultPrompts?.triage}
+                  running={triaging}
                   runLabel="Regenerate"
-                  onRun={(override) => onCompare(override)}
+                  onRun={(override) => onTriage(override)}
                 />
               </div>
-              <ComparisonPanel result={comparison} />
+              <TriagePanel result={triage} />
             </>
           )}
         </div>

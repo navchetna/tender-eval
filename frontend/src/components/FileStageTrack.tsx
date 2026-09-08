@@ -10,10 +10,10 @@ import { useToast } from "@/components/ToastProvider";
 const PIPELINE_STAGES: PipelineStage[] = ["received", "parsed", "sections", "clauses"];
 
 const ALIGNED_NOTE: Record<"todo" | "active" | "done" | "failed", string> = {
-  todo: "Not reached yet — this file's own technical/price sections must be approved first.",
-  active: "Waiting on the other side (tender ↔ bid) to be fully approved too.",
+  todo: "Not reached yet — this file's own payment/service compliance sections must be approved first.",
+  active: "Waiting on the other side (circular ↔ submission) to be fully approved too.",
   done: "Ready — both sides are approved and aligned for comparison.",
-  failed: "Not reached yet — this file's own technical/price sections must be approved first.",
+  failed: "Not reached yet — this file's own payment/service compliance sections must be approved first.",
 };
 
 export function FileStageTrack({

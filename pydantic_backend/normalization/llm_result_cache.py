@@ -1,7 +1,7 @@
 """
-Persisted cache for every LLM-computed normalization result: the aligned technical/price view,
+Persisted cache for every LLM-computed normalization result: the aligned payment/service view,
 the holistic per-topic score, the detailed cross-topic comparison, and the compliance matrix.
-All four are a pure function of the *approved* tender/bid section content for one
+All four are a pure function of the *approved* circular/submission section content for one
 project/version, so recomputing (and re-billing) them from scratch on every view is pure
 waste. Cached here — generic over `kind`/`topic` rather than one table per result type, since
 the get/save/invalidate shape is identical — and invalidated in one place whenever that content
@@ -43,7 +43,7 @@ async def save_cached(settings: Settings, project_id: str, version: int, kind: s
 
 async def invalidate(settings: Settings, project_id: str, version: int) -> None:
     """Drop every cached kind/topic for this project/version. Approving or correcting any one
-    section can affect the aligned view, score, comparison, and matrix alike (compare/matrix
+    section can affect the aligned view, score, triage, and matrix alike (triage/matrix
     span both topics), so it's simplest and safest to clear everything for that
     (project_id, version) rather than track exactly which kinds depend on which topic."""
     async with pool_connection(settings) as connection:

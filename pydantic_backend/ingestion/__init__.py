@@ -1,1 +1,1 @@
-"""Gmail-to-PostgreSQL first stage of the tender repository workflow."""
+"""Gmail-to-PostgreSQL first stage of the merchant compliance repository workflow."""

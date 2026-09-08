@@ -14,8 +14,8 @@ const intelOne = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Reconcile — tender ↔ bid",
-  description: "Frontend for tender and bid document compliance.",
+  title: "NPCI Merchant Compliance Evaluator",
+  description: "Evaluates merchant compliance self-certification submissions against NPCI circulars.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

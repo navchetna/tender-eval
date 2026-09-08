@@ -28,9 +28,9 @@ import type { Employee, EvaluationRecord, Project, ProjectFileRecord } from "@/l
 interface ProjectSummary {
   project: Project;
   currentFiles: ProjectFileRecord[];
-  bidCount: number;
-  tenderEvals: EvaluationRecord[];
-  bidEvals: EvaluationRecord[];
+  submissionCount: number;
+  circularEvals: EvaluationRecord[];
+  submissionEvals: EvaluationRecord[];
 }
 
 function NewProjectForm({ onCreated }: { onCreated: (p: Project) => void }) {
@@ -79,7 +79,7 @@ function NewProjectForm({ onCreated }: { onCreated: (p: Project) => void }) {
             pattern="^[A-Za-z0-9][A-Za-z0-9_\-]*$"
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            placeholder="BPCL-2026-002"
+            placeholder="NPCI-2026-002"
             className="w-[180px] rounded-[9px] border-[0.5px] border-line-strong bg-surface px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
           />
         </label>
@@ -89,7 +89,7 @@ function NewProjectForm({ onCreated }: { onCreated: (p: Project) => void }) {
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Construction of ABC Facility"
+            placeholder="UPI Merchant Compliance Review"
             className="w-[280px] rounded-[9px] border-[0.5px] border-line-strong bg-surface px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
           />
         </label>
@@ -217,15 +217,15 @@ export default function ProjectsPage() {
         projects.map(async (project) => {
           const files = await getProjectFiles(project.project_id);
           const currentFiles = files.filter((f) => f.version === project.current_version);
-          const bidCount = currentFiles.filter((f) => f.file_type === "BID").length;
-          const [tenderEvals, bidEvals] =
+          const submissionCount = currentFiles.filter((f) => f.file_type === "SUBMISSION").length;
+          const [circularEvals, submissionEvals] =
             project.current_version > 0
               ? await Promise.all([
-                  getEvaluationsByProject("tender", project.project_id, project.current_version),
-                  getEvaluationsByProject("bid", project.project_id, project.current_version),
+                  getEvaluationsByProject("circular", project.project_id, project.current_version),
+                  getEvaluationsByProject("submission", project.project_id, project.current_version),
                 ]).catch(() => [[], []] as [EvaluationRecord[], EvaluationRecord[]])
               : [[], []];
-          return { project, currentFiles, bidCount, tenderEvals, bidEvals };
+          return { project, currentFiles, submissionCount, circularEvals, submissionEvals };
         })
       );
       setSummaries(withFiles);
@@ -282,7 +282,7 @@ export default function ProjectsPage() {
     setCheckingGmail(true);
     try {
       const results = await pollGmail();
-      toast(results.length > 0 ? `Found ${results.length} new project email(s) — ingesting into Received` : "No new unread tender/bid emails found");
+      toast(results.length > 0 ? `Found ${results.length} new project email(s) — ingesting into Received` : "No new unread circular/submission emails found");
       setGmailAuthorized(true);
       await load();
     } catch (err) {
@@ -312,7 +312,7 @@ export default function ProjectsPage() {
         <h1 className="m-0 text-[21px] font-semibold text-ink">Projects</h1>
         <div className="mt-[5px] flex flex-wrap items-center justify-between gap-3">
           <p className="text-[13.5px] text-ink-soft">
-            Each project has one tender and its bidders. Reconciliation runs continuously as documents arrive.
+            Each project has one compliance circular and its merchant submissions. Reconciliation runs continuously as documents arrive.
           </p>
           {user?.role === "ADMIN" && (
             <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
@@ -328,7 +328,7 @@ export default function ProjectsPage() {
                   className="btn flex min-w-[196px] items-center gap-[6px] rounded-[8px] border-[0.5px] border-line-strong bg-surface px-[10px] py-[6px] text-[12.5px] text-ink disabled:opacity-60"
                 >
                   <Mail size={14} />
-                  {checkingGmail ? "Checking…" : "Check Gmail for new tenders"}
+                  {checkingGmail ? "Checking…" : "Check Gmail for new circulars"}
                 </button>
               </div>
               <button
@@ -354,7 +354,7 @@ export default function ProjectsPage() {
         </Empty>
       )}
       <div className="grid grid-cols-[repeat(auto-fill,minmax(310px,1fr))] gap-[15px]">
-        {summaries?.map(({ project, currentFiles, bidCount, tenderEvals, bidEvals }) => (
+        {summaries?.map(({ project, currentFiles, submissionCount, circularEvals, submissionEvals }) => (
           <Link key={project.project_id} href={`/projects/${project.project_id}`}>
             <Card className="lift cursor-pointer p-[17px]">
               <div className="mb-[11px] flex items-center justify-between">
@@ -365,7 +365,7 @@ export default function ProjectsPage() {
                       <Award size={12} />
                       Completed
                     </Pill>
-                  ) : bidCount > 0 ? (
+                  ) : submissionCount > 0 ? (
                     <Pill tone="ok">
                       <Check size={12} />
                       On track
@@ -394,13 +394,13 @@ export default function ProjectsPage() {
               </div>
               <div className="text-[16px] font-semibold text-ink">{project.project_name}</div>
               <div className="my-[10px] flex items-center gap-2 text-[12.5px] text-ink-soft">
-                <span>Tender v{project.current_version || 1}</span>
+                <span>Circular v{project.current_version || 1}</span>
                 <span className="text-line-strong">·</span>
                 <span>
-                  {bidCount} {bidCount === 1 ? "bid" : "bids"}
+                  {submissionCount} {submissionCount === 1 ? "submission" : "submissions"}
                 </span>
               </div>
-              <ProjectStageTrack currentFiles={currentFiles} tenderEvals={tenderEvals} bidEvals={bidEvals} />
+              <ProjectStageTrack currentFiles={currentFiles} circularEvals={circularEvals} submissionEvals={submissionEvals} />
               {user?.role === "ADMIN" && <AssignSelect project={project} employees={employees} onAssigned={onAssigned} />}
             </Card>
           </Link>
@@ -412,7 +412,7 @@ export default function ProjectsPage() {
         message={
           <>
             This permanently deletes <strong>{deleteTarget?.project_name}</strong> ({deleteTarget?.project_code}) —
-            every uploaded tender/bid file and evaluation record across all versions. This cannot be undone.
+            every uploaded circular/submission file and evaluation record across all versions. This cannot be undone.
           </>
         }
         confirmLabel="Delete project"

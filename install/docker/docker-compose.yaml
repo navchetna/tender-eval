@@ -1,3 +1,6 @@
+# merchant-eval flavour note: compose project/service names and hostnames keep the original
+# tender-bid identifiers on purpose — renaming them would orphan the existing pgdata volume
+# and the DNS names below. Only the app's domain language changed.
 # Assumes tender-bid-api.mg2.eglb.intel.com / tender-bid.mg2.eglb.intel.com are already fronted
 # by a reverse proxy that terminates TLS and forwards to these containers' published ports —
 # neither service here serves HTTPS itself.

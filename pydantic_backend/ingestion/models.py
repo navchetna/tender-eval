@@ -5,8 +5,8 @@ from pydantic import BaseModel, Field
 
 
 class FileType(StrEnum):
-    tender = 'TENDER'
-    bid = 'BID'
+    circular = 'CIRCULAR'
+    submission = 'SUBMISSION'
     unknown = 'UNKNOWN'
 
 
@@ -52,8 +52,8 @@ class Project(BaseModel):
     current_version: int
     status: str
     assigned_to: str | None = None
-    # True once an up-to-date final comparison has been generated for current_version — see
-    # PostgresRepository.list_projects, which derives this from llm_result_cache (kind='compare').
+    # True once an up-to-date risk triage has been generated for current_version — see
+    # PostgresRepository.list_projects, which derives this from llm_result_cache (kind='triage').
     evaluation_completed: bool = False
 
 

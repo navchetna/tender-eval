@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { CheckCircle2, ChevronRight, FileText, Pencil, X } from "lucide-react";
-import { ApiError, getPendingEvaluations, getProjectFiles, getProjects, reviewEvaluation } from "@/lib/api";
+import { ApiError, getPendingEvaluations, getProjectFiles, getProjects, reviewEvaluation, type DocType } from "@/lib/api";
 import type { EvaluationRecord, Project, Topic } from "@/lib/types";
 import { Card } from "@/components/ui/Card";
 import { Pill } from "@/components/ui/Pill";
@@ -18,7 +18,7 @@ interface SelectedFile {
   fileName: string | null;
 }
 
-type DocType = "tender" | "bid";
+const TOPIC_LABEL: Record<Topic, string> = { payment: "Payment compliance", service: "Service compliance" };
 
 function TopicRow({
   docType,
@@ -38,15 +38,15 @@ function TopicRow({
   const [heading, setHeading] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const title = topic === "technical" ? evaluation.technical_section_title : evaluation.price_section_title;
-  const status = topic === "technical" ? evaluation.technical_status : evaluation.price_status;
+  const title = topic === "payment" ? evaluation.payment_section_title : evaluation.service_section_title;
+  const status = topic === "payment" ? evaluation.payment_status : evaluation.service_status;
 
   const approve = async () => {
     setBusy(true);
     try {
       const updated = await reviewEvaluation(docType, evaluation.evaluation_id, { topic });
       onUpdated(updated);
-      toast(`${topic === "technical" ? "Technical" : "Price"} section approved`);
+      toast(`${TOPIC_LABEL[topic]} section approved`);
     } catch (err) {
       toast(err instanceof ApiError ? err.message : "Failed to approve");
     } finally {
@@ -62,7 +62,7 @@ function TopicRow({
       onUpdated(updated);
       setCorrecting(false);
       setHeading("");
-      toast(`${topic === "technical" ? "Technical" : "Price"} section corrected`);
+      toast(`${TOPIC_LABEL[topic]} section corrected`);
     } catch (err) {
       toast(err instanceof ApiError ? err.message : "Failed to correct");
     } finally {
@@ -176,8 +176,8 @@ function DocCard({
 }) {
   const { docType, evaluation } = item;
   const isSelected = selectedFileId === evaluation.file_id;
-  const typeBg = docType === "tender" ? "bg-[#e2e9f0]" : "bg-[#f3eee3]";
-  const typeText = docType === "tender" ? "text-[#3e5e7e]" : "text-[#706049]";
+  const typeBg = docType === "circular" ? "bg-[#e2e9f0]" : "bg-[#f3eee3]";
+  const typeText = docType === "circular" ? "text-[#3e5e7e]" : "text-[#706049]";
   return (
     <div
       className={`overflow-hidden rounded-[9px] border-[0.5px] transition-colors ${isSelected ? "border-accent" : "border-line"}`}
@@ -204,11 +204,11 @@ function DocCard({
         </div>
         {!expanded && (
           <div className="flex flex-wrap items-center gap-[6px] pl-[22px]">
-            <Pill tone={evaluation.technical_status === "APPROVED" ? "ok" : "warn"} mono>
-              tech · {evaluation.technical_status.toLowerCase()}
+            <Pill tone={evaluation.payment_status === "APPROVED" ? "ok" : "warn"} mono>
+              payment · {evaluation.payment_status.toLowerCase()}
             </Pill>
-            <Pill tone={evaluation.price_status === "APPROVED" ? "ok" : "warn"} mono>
-              price · {evaluation.price_status.toLowerCase()}
+            <Pill tone={evaluation.service_status === "APPROVED" ? "ok" : "warn"} mono>
+              service · {evaluation.service_status.toLowerCase()}
             </Pill>
           </div>
         )}
@@ -218,14 +218,14 @@ function DocCard({
           <TopicRow
             docType={docType}
             evaluation={evaluation}
-            topic="technical"
+            topic="payment"
             toc={tocByFileId[evaluation.file_id] ?? null}
             onUpdated={(u) => onUpdated(docType, u)}
           />
           <TopicRow
             docType={docType}
             evaluation={evaluation}
-            topic="price"
+            topic="service"
             toc={tocByFileId[evaluation.file_id] ?? null}
             onUpdated={(u) => onUpdated(docType, u)}
           />
@@ -235,16 +235,16 @@ function DocCard({
   );
 }
 
-function MinimizedTenderStrip({ onExpand }: { onExpand: () => void }) {
+function MinimizedCircularStrip({ onExpand }: { onExpand: () => void }) {
   return (
     <button
       type="button"
       onClick={onExpand}
-      title="Show tender"
+      title="Show circular"
       className="fade flex h-full w-full cursor-pointer flex-col items-center gap-[10px] rounded-[9px] border-[0.5px] border-line bg-surface2 py-[14px] text-ink-faint transition-colors hover:bg-surface hover:text-ink-soft"
     >
       <ChevronRight size={14} />
-      <span className="text-[11px] font-semibold tracking-[0.3px] uppercase [writing-mode:vertical-rl]">Tender</span>
+      <span className="text-[11px] font-semibold tracking-[0.3px] uppercase [writing-mode:vertical-rl]">Circular</span>
       <FileText size={14} className="mt-auto" />
     </button>
   );
@@ -268,17 +268,17 @@ function ProjectAccordion({
   onSelectFile: (file: SelectedFile) => void;
 }) {
   const pendingCount = group.items.filter(
-    ({ evaluation }) => evaluation.technical_status === "SUGGESTED" || evaluation.price_status === "SUGGESTED"
+    ({ evaluation }) => evaluation.payment_status === "SUGGESTED" || evaluation.service_status === "SUGGESTED"
   ).length;
 
-  const tenderItems = group.items.filter((i) => i.docType === "tender");
-  const bidItems = group.items.filter((i) => i.docType === "bid");
+  const circularItems = group.items.filter((i) => i.docType === "circular");
+  const submissionItems = group.items.filter((i) => i.docType === "submission");
   const selectedItem = group.items.find((i) => i.evaluation.file_id === selectedFileId) ?? null;
-  const isBidFocused = selectedItem?.docType === "bid";
-  const isTenderFocused = selectedItem?.docType === "tender";
+  const isSubmissionFocused = selectedItem?.docType === "submission";
+  const isCircularFocused = selectedItem?.docType === "circular";
 
   // While a document is being previewed, its siblings stay listed (so a reviewer can still see
-  // and switch to any other bid) but collapse down to just the title — their Approve/Correct
+  // and switch to any other submission) but collapse down to just the title — their Approve/Correct
   // buttons are hidden so they can't be mistaken for the previewed document's.
 
   return (
@@ -298,14 +298,14 @@ function ProjectAccordion({
       </button>
       {expanded && (
         <div className="flex gap-[16px] border-t-[0.5px] border-line px-[19px] pt-[15px] pb-[19px]">
-          {/* Tender — stays put and full-size while previewing itself; minimizes to a slim tab
-              once a bid is being previewed instead, pushing its space over to the bidders. */}
+          {/* Circular — stays put and full-size while previewing itself; minimizes to a slim tab
+              once a submission is being previewed instead, pushing its space over to the merchants. */}
           <div
             className="min-w-0 shrink-0 overflow-hidden transition-[flex-basis] duration-300 ease-out"
-            style={{ flex: isBidFocused ? "0 0 64px" : "0 0 46%" }}
+            style={{ flex: isSubmissionFocused ? "0 0 64px" : "0 0 46%" }}
           >
-            {isBidFocused ? (
-              <MinimizedTenderStrip
+            {isSubmissionFocused ? (
+              <MinimizedCircularStrip
                 onExpand={() =>
                   selectedItem &&
                   onSelectFile({
@@ -317,13 +317,13 @@ function ProjectAccordion({
               />
             ) : (
               <div className="fade flex flex-col gap-[14px]">
-                <div className="text-[11px] font-semibold tracking-[0.4px] text-ink-faint uppercase">Tender</div>
-                {tenderItems.length === 0 ? (
+                <div className="text-[11px] font-semibold tracking-[0.4px] text-ink-faint uppercase">Checklist circular</div>
+                {circularItems.length === 0 ? (
                   <Card className="p-[15px]">
-                    <Empty>No tender document yet.</Empty>
+                    <Empty>No compliance circular yet.</Empty>
                   </Card>
                 ) : (
-                  tenderItems.map((item) => (
+                  circularItems.map((item) => (
                     <DocCard
                       key={item.evaluation.evaluation_id}
                       item={item}
@@ -331,7 +331,7 @@ function ProjectAccordion({
                       onUpdated={onUpdated}
                       selectedFileId={selectedFileId}
                       onSelectFile={onSelectFile}
-                      expanded={!isTenderFocused || item.evaluation.file_id === selectedFileId}
+                      expanded={!isCircularFocused || item.evaluation.file_id === selectedFileId}
                     />
                   ))
                 )}
@@ -339,21 +339,21 @@ function ProjectAccordion({
             )}
           </div>
 
-          {/* Bidders — collapses away entirely once the tender is being previewed (freeing the
-              space for its PDF); shifts left and grows to fill the tender's vacated space once a
-              bid is being previewed instead. */}
+          {/* Merchant submissions — collapses away entirely once the circular is being previewed
+              (freeing the space for its PDF); shifts left and grows to fill the circular's vacated
+              space once a submission is being previewed instead. */}
           <div
             className="min-w-0 shrink-0 overflow-hidden transition-[flex-basis,opacity] duration-300 ease-out"
-            style={{ flex: isTenderFocused ? "0 0 0%" : isBidFocused ? "0 0 40%" : "0 0 54%", opacity: isTenderFocused ? 0 : 1 }}
+            style={{ flex: isCircularFocused ? "0 0 0%" : isSubmissionFocused ? "0 0 40%" : "0 0 54%", opacity: isCircularFocused ? 0 : 1 }}
           >
             <div className="flex flex-col gap-[14px]">
-              <div className="text-[11px] font-semibold tracking-[0.4px] text-ink-faint uppercase">Bidders</div>
-              {bidItems.length === 0 ? (
+              <div className="text-[11px] font-semibold tracking-[0.4px] text-ink-faint uppercase">Merchant submissions</div>
+              {submissionItems.length === 0 ? (
                 <Card className="p-[15px]">
-                  <Empty>No bids received yet.</Empty>
+                  <Empty>No merchant submissions received yet.</Empty>
                 </Card>
               ) : (
-                bidItems.map((item) => (
+                submissionItems.map((item) => (
                   <DocCard
                     key={item.evaluation.evaluation_id}
                     item={item}
@@ -361,7 +361,7 @@ function ProjectAccordion({
                     onUpdated={onUpdated}
                     selectedFileId={selectedFileId}
                     onSelectFile={onSelectFile}
-                    expanded={!isBidFocused || item.evaluation.file_id === selectedFileId}
+                    expanded={!isSubmissionFocused || item.evaluation.file_id === selectedFileId}
                   />
                 ))
               )}
@@ -404,8 +404,8 @@ function ProjectAccordion({
 }
 
 export default function ReviewPage() {
-  const [tender, setTender] = useState<EvaluationRecord[] | null>(null);
-  const [bid, setBid] = useState<EvaluationRecord[] | null>(null);
+  const [circular, setCircular] = useState<EvaluationRecord[] | null>(null);
+  const [submission, setSubmission] = useState<EvaluationRecord[] | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [tocByFileId, setTocByFileId] = useState<Record<string, string | null>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -417,17 +417,17 @@ export default function ReviewPage() {
     let cancelled = false;
     (async () => {
       try {
-        const [t, b, allProjects] = await Promise.all([
-          getPendingEvaluations("tender"),
-          getPendingEvaluations("bid"),
+        const [c, s, allProjects] = await Promise.all([
+          getPendingEvaluations("circular"),
+          getPendingEvaluations("submission"),
           getProjects(),
         ]);
         if (cancelled) return;
-        setTender(t);
-        setBid(b);
+        setCircular(c);
+        setSubmission(s);
         setProjects(allProjects);
 
-        const projectIds = Array.from(new Set([...t, ...b].map((e) => e.project_id)));
+        const projectIds = Array.from(new Set([...c, ...s].map((e) => e.project_id)));
         const filesByProject = await Promise.all(projectIds.map((id) => getProjectFiles(id)));
         const tocMap: Record<string, string | null> = {};
         for (const files of filesByProject) {
@@ -444,10 +444,10 @@ export default function ReviewPage() {
   }, []);
 
   const updateOne = (docType: DocType, updated: EvaluationRecord) => {
-    const setList = docType === "tender" ? setTender : setBid;
+    const setList = docType === "circular" ? setCircular : setSubmission;
     setList((prev) => {
       if (!prev) return prev;
-      const stillPending = updated.technical_status === "SUGGESTED" || updated.price_status === "SUGGESTED";
+      const stillPending = updated.payment_status === "SUGGESTED" || updated.service_status === "SUGGESTED";
       if (!stillPending) return prev.filter((e) => e.evaluation_id !== updated.evaluation_id);
       return prev.map((e) => (e.evaluation_id === updated.evaluation_id ? updated : e));
     });
@@ -462,7 +462,7 @@ export default function ReviewPage() {
     );
   }
 
-  if (tender === null || bid === null) {
+  if (circular === null || submission === null) {
     return (
       <div className="px-[30px] py-[26px]">
         <Empty>Loading…</Empty>
@@ -471,8 +471,8 @@ export default function ReviewPage() {
   }
 
   const items: Item[] = [
-    ...tender.map((evaluation) => ({ docType: "tender" as const, evaluation })),
-    ...bid.map((evaluation) => ({ docType: "bid" as const, evaluation })),
+    ...circular.map((evaluation) => ({ docType: "circular" as const, evaluation })),
+    ...submission.map((evaluation) => ({ docType: "submission" as const, evaluation })),
   ];
 
   const groupsByProject = new Map<string, ProjectGroup>();
@@ -492,8 +492,8 @@ export default function ReviewPage() {
     <div className="px-[30px] py-[26px]">
       <h1 className="m-0 text-[21px] font-semibold text-ink">Review queue</h1>
       <p className="mt-[5px] mb-[22px] text-[13.5px] text-ink-soft">
-        Technical and price sections detected by the model, grouped by project — expand a project to review, with the tender on
-        the left and bidders on the right. Click a document name to preview its source PDF in place.
+        Payment and service compliance sections detected by the model, grouped by project — expand a project to review, with the
+        circular on the left and merchant submissions on the right. Click a document name to preview its source PDF in place.
       </p>
       {groups.length === 0 && (
         <Card className="p-[42px]">

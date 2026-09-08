@@ -57,9 +57,9 @@ function TypeSelect({
       onChange={onChange}
       className="rounded-md border-[0.5px] border-line-strong bg-surface px-[6px] py-[2px] text-[11px] text-ink-soft outline-none disabled:opacity-60"
     >
-      <option value="TENDER">tender</option>
-      <option value="BID">bid</option>
-      <option value="UNKNOWN">unknown</option>
+      <option value="CIRCULAR">Circular</option>
+      <option value="SUBMISSION">Merchant submission</option>
+      <option value="UNKNOWN">Unknown</option>
     </select>
   );
 }
@@ -143,38 +143,38 @@ function FileDropzone({
 function UploadForm({ projectId, onUploaded }: { projectId: string; onUploaded: () => void }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
-  const [tenderFile, setTenderFile] = useState<File | null>(null);
-  const [bidFiles, setBidFiles] = useState<File[]>([]);
+  const [circularFile, setCircularFile] = useState<File | null>(null);
+  const [submissionFiles, setSubmissionFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const bids = bidFiles;
-    if (!tenderFile && bids.length === 0) {
-      setError("Choose a tender PDF, one or more bid PDFs, or both");
+    const submissions = submissionFiles;
+    if (!circularFile && submissions.length === 0) {
+      setError("Choose a circular PDF, one or more merchant submission PDFs, or both");
       return;
     }
     setSubmitting(true);
     setError(null);
     try {
-      // Every upload here is a brand-new round: tender + bids submitted together always
+      // Every upload here is a brand-new round: circular + submissions submitted together always
       // become one new version, mirroring the fact that a resubmission always replaces
-      // both the tender and every bid at once — never a partial addition to an old round.
+      // both the circular and every merchant submission at once — never a partial addition to an old round.
       let uploadedCount = 0;
       let versionStarted = false;
-      if (tenderFile) {
-        const uploaded = await uploadProjectFiles(projectId, [tenderFile], "TENDER", true);
+      if (circularFile) {
+        const uploaded = await uploadProjectFiles(projectId, [circularFile], "CIRCULAR", true);
         uploadedCount += uploaded.length;
         versionStarted = true;
       }
-      if (bids.length > 0) {
-        const uploaded = await uploadProjectFiles(projectId, bids, "BID", !versionStarted);
+      if (submissions.length > 0) {
+        const uploaded = await uploadProjectFiles(projectId, submissions, "SUBMISSION", !versionStarted);
         uploadedCount += uploaded.length;
       }
       toast(`Uploaded ${uploadedCount} file${uploadedCount === 1 ? "" : "s"} as a new version`);
-      setTenderFile(null);
-      setBidFiles([]);
+      setCircularFile(null);
+      setSubmissionFiles([]);
       setOpen(false);
       onUploaded();
     } catch (err) {
@@ -201,24 +201,24 @@ function UploadForm({ projectId, onUploaded }: { projectId: string; onUploaded: 
       <form onSubmit={onSubmit} className="flex flex-col gap-3">
         <div className="flex flex-wrap items-start gap-3">
           <FileDropzone
-            label="Tender PDF"
+            label="Compliance circular PDF"
             icon={<FileText size={14} />}
             accept="application/pdf"
-            files={tenderFile ? [tenderFile] : []}
-            onPick={(files) => setTenderFile(files?.[0] ?? null)}
-            onRemove={() => setTenderFile(null)}
+            files={circularFile ? [circularFile] : []}
+            onPick={(files) => setCircularFile(files?.[0] ?? null)}
+            onRemove={() => setCircularFile(null)}
           />
           <FileDropzone
-            label="Bid PDFs"
+            label="Merchant self-certification PDFs"
             icon={<Users size={14} />}
             accept="application/pdf"
             multiple
-            files={bidFiles}
+            files={submissionFiles}
             onPick={(files) => {
               const picked = files ? Array.from(files) : [];
-              setBidFiles((prev) => [...prev, ...picked]);
+              setSubmissionFiles((prev) => [...prev, ...picked]);
             }}
-            onRemove={(index) => setBidFiles((prev) => prev.filter((_, i) => i !== index))}
+            onRemove={(index) => setSubmissionFiles((prev) => prev.filter((_, i) => i !== index))}
           />
         </div>
         <div className="flex items-center gap-2">
@@ -243,32 +243,32 @@ function UploadForm({ projectId, onUploaded }: { projectId: string; onUploaded: 
   );
 }
 
-function AddBidderForm({ projectId, onUploaded }: { projectId: string; onUploaded: () => void }) {
+function AddMerchantForm({ projectId, onUploaded }: { projectId: string; onUploaded: () => void }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
-  const [bidFiles, setBidFiles] = useState<File[]>([]);
+  const [submissionFiles, setSubmissionFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const close = () => {
     setOpen(false);
-    setBidFiles([]);
+    setSubmissionFiles([]);
     setError(null);
   };
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (bidFiles.length === 0) {
-      setError("Choose one or more bid PDFs");
+    if (submissionFiles.length === 0) {
+      setError("Choose one or more merchant submission PDFs");
       return;
     }
     setSubmitting(true);
     setError(null);
     try {
-      // new_version=false: these bidders join the current round's existing Drive folder,
+      // new_version=false: these merchants join the current round's existing Drive folder,
       // instead of UploadForm's "new round" path which always starts a fresh version.
-      const uploaded = await uploadProjectFiles(projectId, bidFiles, "BID", false);
-      toast(`Added ${uploaded.length} bidder${uploaded.length === 1 ? "" : "s"} to the current round`);
+      const uploaded = await uploadProjectFiles(projectId, submissionFiles, "SUBMISSION", false);
+      toast(`Added ${uploaded.length} merchant${uploaded.length === 1 ? "" : "s"} to the current round`);
       close();
       onUploaded();
     } catch (err) {
@@ -285,29 +285,29 @@ function AddBidderForm({ projectId, onUploaded }: { projectId: string; onUploade
         className="btn flex cursor-pointer items-center gap-[6px] rounded-[8px] border-[0.5px] border-line-strong bg-surface px-[10px] py-[5px] text-[11.5px] text-ink"
       >
         <UserPlus size={13} />
-        Add bidder
+        Add merchant
       </button>
       {open && (
         // Rendered as a fixed overlay (not inline) so opening it never reflows the
-        // Bidders card or anything else on the page.
+        // Merchants card or anything else on the page.
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(32,32,28,.4)] px-4" onClick={close}>
           <div
             className="expand w-full max-w-[440px] rounded-[13px] border-[0.5px] border-line bg-surface p-5 shadow-[0_20px_60px_-15px_rgba(30,28,24,.4)]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-4 text-[15px] font-semibold text-ink">Add bidder to the current round</div>
+            <div className="mb-4 text-[15px] font-semibold text-ink">Add merchant to the current round</div>
             <form onSubmit={onSubmit} className="flex flex-col gap-[12px]">
               <FileDropzone
-                label="Bid PDFs"
+                label="Merchant self-certification PDFs"
                 icon={<Users size={14} />}
                 accept="application/pdf"
                 multiple
-                files={bidFiles}
+                files={submissionFiles}
                 onPick={(files) => {
                   const picked = files ? Array.from(files) : [];
-                  setBidFiles((prev) => [...prev, ...picked]);
+                  setSubmissionFiles((prev) => [...prev, ...picked]);
                 }}
-                onRemove={(index) => setBidFiles((prev) => prev.filter((_, i) => i !== index))}
+                onRemove={(index) => setSubmissionFiles((prev) => prev.filter((_, i) => i !== index))}
               />
               <div className="flex justify-end gap-2">
                 <button
@@ -373,11 +373,11 @@ export function Workspace({ projectId }: { projectId: string }) {
 
   const loadEvaluations = async (version: number) => {
     try {
-      const [tenderEvals, bidEvals] = await Promise.all([
-        getEvaluationsByProject("tender", projectId, version),
-        getEvaluationsByProject("bid", projectId, version),
+      const [circularEvals, submissionEvals] = await Promise.all([
+        getEvaluationsByProject("circular", projectId, version),
+        getEvaluationsByProject("submission", projectId, version),
       ]);
-      setEvaluations([...tenderEvals, ...bidEvals]);
+      setEvaluations([...circularEvals, ...submissionEvals]);
     } catch {
       setEvaluations([]);
     }
@@ -399,21 +399,21 @@ export function Workspace({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (!files || viewVersion == null) return;
     const currentFiles = files.filter((f) => f.version === viewVersion);
-    const tenderFile = currentFiles.find((f) => f.file_type === "TENDER") ?? null;
-    const bidFiles = currentFiles.filter((f) => f.file_type === "BID");
+    const circularFile = currentFiles.find((f) => f.file_type === "CIRCULAR") ?? null;
+    const submissionFiles = currentFiles.filter((f) => f.file_type === "SUBMISSION");
     const evalFor = (fileId: string) => evaluations.find((e) => e.file_id === fileId) ?? null;
-    const tenderEval = tenderFile ? evalFor(tenderFile.file_id) : null;
-    const tenderDone = tenderEval != null && isFullyApproved(tenderEval);
-    const anyBidDone = bidFiles.some((b) => {
-      const e = evalFor(b.file_id);
+    const circularEval = circularFile ? evalFor(circularFile.file_id) : null;
+    const circularDone = circularEval != null && isFullyApproved(circularEval);
+    const anySubmissionDone = submissionFiles.some((s) => {
+      const e = evalFor(s.file_id);
       return e != null && isFullyApproved(e);
     });
 
     const rows = [
-      ...(tenderFile ? [{ file: tenderFile, evaluation: tenderEval, alignmentReady: anyBidDone }] : []),
-      ...bidFiles.map((b) => {
-        const e = evalFor(b.file_id);
-        return { file: b, evaluation: e, alignmentReady: tenderDone && e != null && isFullyApproved(e) };
+      ...(circularFile ? [{ file: circularFile, evaluation: circularEval, alignmentReady: anySubmissionDone }] : []),
+      ...submissionFiles.map((s) => {
+        const e = evalFor(s.file_id);
+        return { file: s, evaluation: e, alignmentReady: circularDone && e != null && isFullyApproved(e) };
       }),
     ];
 
@@ -461,13 +461,13 @@ export function Workspace({ projectId }: { projectId: string }) {
   // Reports this project's pipeline progress up to the shared PipelineRibbon in the app layout,
   // so the reviewer sees where their currently-open project sits relative to the whole pipeline.
   const stageCurrentFiles = files?.filter((f) => f.version === viewVersion) ?? [];
-  const stageTender = stageCurrentFiles.find((f) => f.file_type === "TENDER") ?? null;
-  const stageTenderEval = stageTender ? (evaluations.find((e) => e.file_id === stageTender.file_id) ?? null) : null;
-  const stageBidEvals = stageCurrentFiles
-    .filter((f) => f.file_type === "BID")
+  const stageCircular = stageCurrentFiles.find((f) => f.file_type === "CIRCULAR") ?? null;
+  const stageCircularEval = stageCircular ? (evaluations.find((e) => e.file_id === stageCircular.file_id) ?? null) : null;
+  const stageSubmissionEvals = stageCurrentFiles
+    .filter((f) => f.file_type === "SUBMISSION")
     .map((f) => evaluations.find((e) => e.file_id === f.file_id))
     .filter((e): e is EvaluationRecord => e != null);
-  const stageSegs = computeProjectSegments(stageCurrentFiles, stageTenderEval ? [stageTenderEval] : [], stageBidEvals);
+  const stageSegs = computeProjectSegments(stageCurrentFiles, stageCircularEval ? [stageCircularEval] : [], stageSubmissionEvals);
   useReportActiveStage(files && viewVersion != null ? ribbonStageForSegments(stageSegs) : null);
 
   if (error) {
@@ -492,15 +492,15 @@ export function Workspace({ projectId }: { projectId: string }) {
 
   const versions = Array.from(new Set(files.map((f) => f.version))).sort((a, b) => b - a);
   const currentFiles = files.filter((f) => f.version === viewVersion);
-  const tender = currentFiles.find((f) => f.file_type === "TENDER") ?? null;
-  const tenderVersions = files.filter((f) => f.file_type === "TENDER").sort((a, b) => b.version - a.version);
-  const bids = currentFiles.filter((f) => f.file_type === "BID");
+  const circular = currentFiles.find((f) => f.file_type === "CIRCULAR") ?? null;
+  const circularVersions = files.filter((f) => f.file_type === "CIRCULAR").sort((a, b) => b.version - a.version);
+  const submissions = currentFiles.filter((f) => f.file_type === "SUBMISSION");
   const canView = (f: ProjectFileRecord) => f.processing_status === "PARSED";
   const evaluationFor = (fileId: string) => evaluations.find((e) => e.file_id === fileId) ?? null;
-  const tenderEvaluation = tender ? evaluationFor(tender.file_id) : null;
-  const tenderApproved = tenderEvaluation != null && isFullyApproved(tenderEvaluation);
-  const anyBidApproved = bids.some((b) => {
-    const e = evaluationFor(b.file_id);
+  const circularEvaluation = circular ? evaluationFor(circular.file_id) : null;
+  const circularApproved = circularEvaluation != null && isFullyApproved(circularEvaluation);
+  const anySubmissionApproved = submissions.some((s) => {
+    const e = evaluationFor(s.file_id);
     return e != null && isFullyApproved(e);
   });
 
@@ -535,7 +535,7 @@ export function Workspace({ projectId }: { projectId: string }) {
               ))}
             </select>
           )}
-          {tenderApproved ? (
+          {circularApproved ? (
             <Link
               href={`/projects/${projectId}/matrix`}
               className="btn flex items-center gap-[7px] rounded-[9px] border-[0.5px] border-accent bg-accent px-[15px] py-2 text-[13px] font-medium text-white shadow-[0_2px_8px_-3px_rgba(47,93,138,.5)]"
@@ -545,7 +545,7 @@ export function Workspace({ projectId }: { projectId: string }) {
             </Link>
           ) : (
             <span
-              title="The tender's technical and price sections must be reviewed and approved before the compliance matrix has anything to compare."
+              title="The circular's payment and service compliance sections must be reviewed and approved before the compliance matrix has anything to compare."
               className="flex cursor-not-allowed items-center gap-[7px] rounded-[9px] border-[0.5px] border-line-strong bg-surface px-[15px] py-2 text-[13px] font-medium text-ink-faint opacity-60"
             >
               <LayoutGrid size={15} />
@@ -563,22 +563,22 @@ export function Workspace({ projectId }: { projectId: string }) {
 
       <div className="grid grid-cols-[2fr_3fr] items-start gap-4">
         <div>
-          <SectionLabel>Tender</SectionLabel>
-          {tender ? (
+          <SectionLabel>Circular</SectionLabel>
+          {circular ? (
             <Card
-              className={`rowh p-[15px] ${sel?.file_id === tender.file_id ? "rowsel" : ""}`}
-              onClick={() => canView(tender) && setSel(sel?.file_id === tender.file_id ? null : tender)}
+              className={`rowh p-[15px] ${sel?.file_id === circular.file_id ? "rowsel" : ""}`}
+              onClick={() => canView(circular) && setSel(sel?.file_id === circular.file_id ? null : circular)}
             >
               <div className="mb-1 flex items-center gap-2">
                 <FileText size={15} className="text-accent" />
-                <span className="text-[13.5px] font-semibold text-ink">Version {tender.version}</span>
-                {user?.role === "ADMIN" && <TypeSelect file={tender} onChanged={onFileTypeChanged} />}
+                <span className="text-[13.5px] font-semibold text-ink">Version {circular.version}</span>
+                {user?.role === "ADMIN" && <TypeSelect file={circular} onChanged={onFileTypeChanged} />}
               </div>
-              <div className="mb-3 font-mono text-[11px] break-all text-ink-faint">{tender.file_name}</div>
-              <FileStageTrack file={tender} evaluation={tenderEvaluation} alignmentReady={anyBidApproved} onRetried={onRetried} />
-              {tender.drive_web_link && (
+              <div className="mb-3 font-mono text-[11px] break-all text-ink-faint">{circular.file_name}</div>
+              <FileStageTrack file={circular} evaluation={circularEvaluation} alignmentReady={anySubmissionApproved} onRetried={onRetried} />
+              {circular.drive_web_link && (
                 <a
-                  href={tender.drive_web_link}
+                  href={circular.drive_web_link}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mt-3 flex items-center gap-[6px] text-[12px] text-accent"
@@ -587,10 +587,10 @@ export function Workspace({ projectId }: { projectId: string }) {
                   Open in Drive
                 </a>
               )}
-              {tenderVersions.length > 1 && (
+              {circularVersions.length > 1 && (
                 <div className="mt-4 border-t-[0.5px] border-line pt-[10px]">
                   <div className="mb-2 text-[11px] tracking-[0.4px] text-ink-faint uppercase">Version history</div>
-                  {tenderVersions.map((v) => (
+                  {circularVersions.map((v) => (
                     <div key={v.file_id} className="flex items-center justify-between py-[5px] text-[12.5px]">
                       <span className={v.version === project.current_version ? "font-medium text-ink" : "text-ink-faint"}>v{v.version}</span>
                       <span className={`text-[11px] ${v.version === project.current_version ? "text-ok-fg" : "text-ink-faint"}`}>
@@ -603,45 +603,45 @@ export function Workspace({ projectId }: { projectId: string }) {
             </Card>
           ) : (
             <Card className="p-[15px]">
-              <Empty>No tender document yet.</Empty>
+              <Empty>No compliance circular yet.</Empty>
             </Card>
           )}
         </div>
 
         <div>
           <div className="mb-[9px] flex items-center justify-between">
-            <SectionLabel>Bidders</SectionLabel>
+            <SectionLabel>Merchants</SectionLabel>
             {user?.role === "ADMIN" && viewVersion === project.current_version && (
-              <AddBidderForm projectId={projectId} onUploaded={onUploaded} />
+              <AddMerchantForm projectId={projectId} onUploaded={onUploaded} />
             )}
           </div>
           <Card className="overflow-hidden">
-            {bids.length === 0 && <Empty>No bids received yet.</Empty>}
-            {bids.map((b, i) => {
-              const active = sel?.file_id === b.file_id;
-              const evaluation = evaluationFor(b.file_id);
+            {submissions.length === 0 && <Empty>No merchant submissions received yet.</Empty>}
+            {submissions.map((s, i) => {
+              const active = sel?.file_id === s.file_id;
+              const evaluation = evaluationFor(s.file_id);
               return (
                 <div
-                  key={b.file_id}
+                  key={s.file_id}
                   className={`rowh px-[15px] py-[13px] ${i ? "border-t-[0.5px] border-line" : ""} ${active ? "rowsel" : ""}`}
-                  onClick={() => canView(b) && setSel(active ? null : b)}
+                  onClick={() => canView(s) && setSel(active ? null : s)}
                 >
                   <div className="mb-[9px] flex items-center justify-between">
                     <div className="flex items-center gap-[9px]">
-                      <span className="text-[13.5px] font-medium text-ink">{b.file_name}</span>
-                      <span className="font-mono text-[10.5px] text-ink-faint">v{b.version}</span>
-                      {user?.role === "ADMIN" && <TypeSelect file={b} onChanged={onFileTypeChanged} />}
+                      <span className="text-[13.5px] font-medium text-ink">{s.file_name}</span>
+                      <span className="font-mono text-[10.5px] text-ink-faint">v{s.version}</span>
+                      {user?.role === "ADMIN" && <TypeSelect file={s} onChanged={onFileTypeChanged} />}
                     </div>
-                    {evaluation && evaluation.technical_status === "APPROVED" && evaluation.price_status === "APPROVED" ? (
+                    {evaluation && evaluation.payment_status === "APPROVED" && evaluation.service_status === "APPROVED" ? (
                       <span className="text-[11px] text-ok-fg">both approved</span>
                     ) : evaluation ? (
                       <span className="text-[11px] text-warn-fg">awaiting review</span>
                     ) : null}
                   </div>
                   <FileStageTrack
-                    file={b}
+                    file={s}
                     evaluation={evaluation}
-                    alignmentReady={tenderApproved && evaluation != null && isFullyApproved(evaluation)}
+                    alignmentReady={circularApproved && evaluation != null && isFullyApproved(evaluation)}
                     onRetried={onRetried}
                   />
                 </div>

@@ -1,4 +1,4 @@
-"""PostgreSQL access for the section-evaluation stage (works for both tender and bid documents)."""
+"""PostgreSQL access for the section-evaluation stage (works for both circular and submission documents)."""
 from __future__ import annotations
 
 import uuid
@@ -9,18 +9,19 @@ from ..db import pool_connection
 from .models import DocType, EvaluationRecord, PendingFile, SectionSuggestion, Topic
 
 _TABLE_BY_DOC_TYPE = {
-    DocType.tender: 'tender_evaluations',
-    DocType.bid: 'bid_evaluations',
+    DocType.circular: 'circular_evaluations',
+    DocType.submission: 'submission_evaluations',
 }
 
 
 @dataclass
 class EvaluationRepository:
     """
-    Generic repository parameterised by document type (tender/bid). Both `tender_evaluations`
-    and `bid_evaluations` have an identical shape, so the same code drives both flows.
-    `doc_type` only ever comes from trusted server-side call sites (never raw user input),
-    and is restricted to the two DocType enum members, so interpolating `self._table` is safe.
+    Generic repository parameterised by document type (circular/submission). Both
+    `circular_evaluations` and `submission_evaluations` have an identical shape, so the same
+    code drives both flows. `doc_type` only ever comes from trusted server-side call sites
+    (never raw user input), and is restricted to the two DocType enum members, so
+    interpolating `self._table` is safe.
     """
 
     settings: Settings
@@ -74,8 +75,8 @@ class EvaluationRepository:
     async def create_evaluation(
         self,
         file: PendingFile,
-        technical: SectionSuggestion,
-        price: SectionSuggestion,
+        payment: SectionSuggestion,
+        service: SectionSuggestion,
         model: str,
     ) -> str | None:
         """Insert the AI-suggested evaluation row; returns the new evaluation_id, or None if one already exists."""
@@ -86,17 +87,17 @@ class EvaluationRepository:
                     f'''
                     INSERT INTO {self._table} (
                         evaluation_id, file_id, project_id, version, detection_model,
-                        technical_section_title, technical_section_content,
-                        technical_ai_title, technical_ai_content,
-                        price_section_title, price_section_content,
-                        price_ai_title, price_ai_content
+                        payment_section_title, payment_section_content,
+                        payment_ai_title, payment_ai_content,
+                        service_section_title, service_section_content,
+                        service_ai_title, service_ai_content
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (file_id) DO NOTHING
                     ''',
                     (
                         evaluation_id, file.file_id, file.project_id, file.version, model,
-                        technical.heading, technical.content, technical.heading, technical.content,
-                        price.heading, price.content, price.heading, price.content,
+                        payment.heading, payment.content, payment.heading, payment.content,
+                        service.heading, service.content, service.heading, service.content,
                     ),
                 )
                 inserted = cursor.rowcount == 1
@@ -125,7 +126,7 @@ class EvaluationRepository:
                 await cursor.execute(
                     f'''
                     SELECT e.evaluation_id, e.file_id, e.project_id, e.version,
-                           e.technical_section_title, e.price_section_title, f.file_name
+                           e.payment_section_title, e.service_section_title, f.file_name
                     FROM {self._table} e
                     JOIN file_repository f ON f.file_id = e.file_id
                     WHERE e.notified_at IS NULL
@@ -182,7 +183,7 @@ class EvaluationRepository:
 
     async def list_pending_review(self, employee_id: str | None = None) -> list[EvaluationRecord]:
         """
-        Evaluations still awaiting a technical/price decision, scoped to each project's
+        Evaluations still awaiting a payment/service decision, scoped to each project's
         *current* version — uploading a new round supersedes the previous one, so a version
         that was never approved before being replaced shouldn't linger in the queue forever
         alongside the new round's genuinely-pending files. When `employee_id` is given, only
@@ -199,7 +200,7 @@ class EvaluationRepository:
         if employee_id is not None:
             query += ' AND p.assigned_to = %s'
             params = (employee_id,)
-        query += " WHERE e.technical_status = 'SUGGESTED' OR e.price_status = 'SUGGESTED' ORDER BY e.created_at"
+        query += " WHERE e.payment_status = 'SUGGESTED' OR e.service_status = 'SUGGESTED' ORDER BY e.created_at"
         async with pool_connection(self.settings) as connection:
             async with connection.cursor() as cursor:
                 await cursor.execute(query, params)
@@ -219,7 +220,7 @@ class EvaluationRepository:
         if employee_id is not None:
             query += ' AND p.assigned_to = %s'
             params = (employee_id,)
-        query += " WHERE e.technical_status = 'SUGGESTED' OR e.price_status = 'SUGGESTED'"
+        query += " WHERE e.payment_status = 'SUGGESTED' OR e.service_status = 'SUGGESTED'"
         async with pool_connection(self.settings) as connection:
             async with connection.cursor() as cursor:
                 await cursor.execute(query, params)
@@ -230,9 +231,9 @@ class EvaluationRepository:
         """
         All evaluations of this doc_type for a given project/version.
 
-        For tender_evaluations this normally returns 0 or 1 row; for bid_evaluations it
-        returns one row per bidder's file. Used to assemble the normalized comparison view
-        on demand — nothing new is persisted for this.
+        For circular_evaluations this normally returns 0 or 1 row; for submission_evaluations
+        it returns one row per merchant's file. Used to assemble the normalized comparison
+        view on demand — nothing new is persisted for this.
         """
         async with pool_connection(self.settings) as connection:
             async with connection.cursor() as cursor:
@@ -290,12 +291,12 @@ class EvaluationRepository:
             await connection.commit()
 
 
-def tender_repository(settings: Settings) -> EvaluationRepository:
-    return EvaluationRepository(settings, DocType.tender)
+def circular_repository(settings: Settings) -> EvaluationRepository:
+    return EvaluationRepository(settings, DocType.circular)
 
 
-def bid_repository(settings: Settings) -> EvaluationRepository:
-    return EvaluationRepository(settings, DocType.bid)
+def submission_repository(settings: Settings) -> EvaluationRepository:
+    return EvaluationRepository(settings, DocType.submission)
 
 
 def _to_record(row: dict) -> EvaluationRecord:
@@ -306,22 +307,22 @@ def _to_record(row: dict) -> EvaluationRecord:
         version=row['version'],
         file_name=row.get('file_name'),
         detection_model=row['detection_model'],
-        technical_section_title=row['technical_section_title'],
-        technical_section_content=row['technical_section_content'],
-        technical_ai_title=row['technical_ai_title'],
-        technical_ai_content=row['technical_ai_content'],
-        technical_status=row['technical_status'],
-        technical_corrected=row['technical_corrected'],
-        technical_reviewed_by=str(row['technical_reviewed_by']) if row['technical_reviewed_by'] else None,
-        technical_reviewed_at=row['technical_reviewed_at'],
-        price_section_title=row['price_section_title'],
-        price_section_content=row['price_section_content'],
-        price_ai_title=row['price_ai_title'],
-        price_ai_content=row['price_ai_content'],
-        price_status=row['price_status'],
-        price_corrected=row['price_corrected'],
-        price_reviewed_by=str(row['price_reviewed_by']) if row['price_reviewed_by'] else None,
-        price_reviewed_at=row['price_reviewed_at'],
+        payment_section_title=row['payment_section_title'],
+        payment_section_content=row['payment_section_content'],
+        payment_ai_title=row['payment_ai_title'],
+        payment_ai_content=row['payment_ai_content'],
+        payment_status=row['payment_status'],
+        payment_corrected=row['payment_corrected'],
+        payment_reviewed_by=str(row['payment_reviewed_by']) if row['payment_reviewed_by'] else None,
+        payment_reviewed_at=row['payment_reviewed_at'],
+        service_section_title=row['service_section_title'],
+        service_section_content=row['service_section_content'],
+        service_ai_title=row['service_ai_title'],
+        service_ai_content=row['service_ai_content'],
+        service_status=row['service_status'],
+        service_corrected=row['service_corrected'],
+        service_reviewed_by=str(row['service_reviewed_by']) if row['service_reviewed_by'] else None,
+        service_reviewed_at=row['service_reviewed_at'],
         notified_at=row['notified_at'],
         created_at=row['created_at'],
         updated_at=row['updated_at'],

@@ -77,8 +77,8 @@ def _sections_detail(file: dict, evaluation: EvaluationRecord | None) -> StageDe
         output={
             # The immutable AI snapshot, not the (possibly human-corrected) current value —
             # this is what detection actually produced, before any review happened.
-            'technical': {'heading': evaluation.technical_ai_title, 'content': evaluation.technical_ai_content},
-            'price': {'heading': evaluation.price_ai_title, 'content': evaluation.price_ai_content},
+            'payment': {'heading': evaluation.payment_ai_title, 'content': evaluation.payment_ai_content},
+            'service': {'heading': evaluation.service_ai_title, 'content': evaluation.service_ai_content},
             'model': evaluation.detection_model,
         } if evaluation is not None else None,
         error=file.get('detection_error'),
@@ -90,19 +90,19 @@ def _clauses_detail(evaluation: EvaluationRecord | None) -> StageDetail:
         return StageDetail()
     return StageDetail(
         input={
-            'technical': {'heading': evaluation.technical_ai_title, 'content': evaluation.technical_ai_content},
-            'price': {'heading': evaluation.price_ai_title, 'content': evaluation.price_ai_content},
+            'payment': {'heading': evaluation.payment_ai_title, 'content': evaluation.payment_ai_content},
+            'service': {'heading': evaluation.service_ai_title, 'content': evaluation.service_ai_content},
         },
         output={
-            'technical': {
-                'heading': evaluation.technical_section_title, 'status': evaluation.technical_status,
-                'corrected': evaluation.technical_corrected, 'reviewed_by': evaluation.technical_reviewed_by,
-                'reviewed_at': _isoformat(evaluation.technical_reviewed_at),
+            'payment': {
+                'heading': evaluation.payment_section_title, 'status': evaluation.payment_status,
+                'corrected': evaluation.payment_corrected, 'reviewed_by': evaluation.payment_reviewed_by,
+                'reviewed_at': _isoformat(evaluation.payment_reviewed_at),
             },
-            'price': {
-                'heading': evaluation.price_section_title, 'status': evaluation.price_status,
-                'corrected': evaluation.price_corrected, 'reviewed_by': evaluation.price_reviewed_by,
-                'reviewed_at': _isoformat(evaluation.price_reviewed_at),
+            'service': {
+                'heading': evaluation.service_section_title, 'status': evaluation.service_status,
+                'corrected': evaluation.service_corrected, 'reviewed_by': evaluation.service_reviewed_by,
+                'reviewed_at': _isoformat(evaluation.service_reviewed_at),
             },
         },
     )

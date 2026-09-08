@@ -39,11 +39,11 @@ export default function OpsPage() {
       const rows: Row[] = [];
       for (const project of projects) {
         const files = await getProjectFiles(project.project_id);
-        const [tenderEvals, bidEvals] = await Promise.all([
-          getEvaluationsByProject("tender", project.project_id, project.current_version),
-          getEvaluationsByProject("bid", project.project_id, project.current_version),
+        const [circularEvals, submissionEvals] = await Promise.all([
+          getEvaluationsByProject("circular", project.project_id, project.current_version),
+          getEvaluationsByProject("submission", project.project_id, project.current_version),
         ]);
-        const evaluations = [...tenderEvals, ...bidEvals];
+        const evaluations = [...circularEvals, ...submissionEvals];
         for (const file of files) {
           rows.push({ file, project, evaluation: evaluations.find((e) => e.file_id === file.file_id) ?? null });
         }
@@ -172,7 +172,7 @@ export default function OpsPage() {
                         {r.file.parse_error && <div className="mt-[2px] text-[11px] text-bad-fg">{r.file.parse_error}</div>}
                       </td>
                       <td className="px-[14px] py-[10px]">
-                        <Pill tone={r.file.file_type === "TENDER" ? "info" : "none"} mono>
+                        <Pill tone={r.file.file_type === "CIRCULAR" ? "info" : "none"} mono>
                           {r.file.file_type.toLowerCase()}
                         </Pill>
                       </td>

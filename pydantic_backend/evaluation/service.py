@@ -1,12 +1,12 @@
 """
-Orchestrates technical/price section detection: TOC -> LiteLLM -> tree lookup -> store -> notify reviewer.
+Orchestrates payment/service compliance section detection: TOC -> LiteLLM -> tree lookup -> store -> notify reviewer.
 
-Works for both tender documents and bid documents — the caller passes in which
-EvaluationRepository (tender_repository or bid_repository) to drive.
+Works for both circular documents and merchant submissions — the caller passes in which
+EvaluationRepository (circular_repository or submission_repository) to drive.
 
 Flow per pending file:
   1. Read the TOC text already stored on file_repository.parse_toc.
-  2. Ask the LLM which heading covers technical requirements and which covers price/commercial.
+  2. Ask the LLM which heading covers payment compliance and which covers service compliance.
   3. Download the parser's output_tree.json from Drive (via the id captured in parse_artifacts)
      and locate each heading's full section text.
   4. Store the suggestion (status SUGGESTED).
@@ -33,9 +33,9 @@ _TREE_ARTIFACT_SUFFIX = '_output_tree.json'
 
 async def _detect(creds: LlmCredentials, settings: Settings, file: PendingFile) -> DetectionResult:
     toc_text = file.parse_toc or ''
-    technical_heading, price_heading = (None, None)
+    payment_heading, service_heading = (None, None)
     if toc_text.strip():
-        technical_heading, price_heading = await detect_sections(creds, toc_text)
+        payment_heading, service_heading = await detect_sections(creds, toc_text)
 
     tree_bytes: bytes | None = None
     artifacts = file.parse_artifacts or {}
@@ -55,8 +55,8 @@ async def _detect(creds: LlmCredentials, settings: Settings, file: PendingFile) 
         return SectionSuggestion(heading=matched_heading, content=content, matched=True)
 
     return DetectionResult(
-        technical=_resolve(technical_heading),
-        price=_resolve(price_heading),
+        payment=_resolve(payment_heading),
+        service=_resolve(service_heading),
         model=creds.model,
     )
 
@@ -77,7 +77,7 @@ async def detect_and_store(
     try:
         await repository.set_detection_error(file.file_id, None)
         result = await _detect(creds, settings, file)
-        evaluation_id = await repository.create_evaluation(file, result.technical, result.price, result.model)
+        evaluation_id = await repository.create_evaluation(file, result.payment, result.service, result.model)
         if evaluation_id is None:
             return None
         return evaluation_id, result
@@ -99,8 +99,8 @@ async def process_pending(creds: LlmCredentials, settings: Settings, repository:
          completes, see parsing/service.py) never ran or failed, e.g. a crash between marking
          the file PARSED and detecting it.
       2. Notify sweep: batch-notify the reviewer for every evaluation that exists but hasn't
-         been notified yet, grouped by (project_id, version) so several bid PDFs from the same
-         tender submission still produce one email. Deliberately decoupled from step 1's
+         been notified yet, grouped by (project_id, version) so several merchant PDFs from the
+         same filing round still produce one email. Deliberately decoupled from step 1's
          claim query — most evaluations these days were created inline right after parsing,
          not by step 1, and still need this sweep to actually get notified.
     """
@@ -118,7 +118,7 @@ async def process_pending(creds: LlmCredentials, settings: Settings, repository:
         groups[(str(row['project_id']), row['version'])].append(
             BatchNotifyItem(
                 file_name=row['file_name'], evaluation_id=str(row['evaluation_id']),
-                technical_heading=row['technical_section_title'], price_heading=row['price_section_title'],
+                payment_heading=row['payment_section_title'], service_heading=row['service_section_title'],
             )
         )
 
@@ -160,7 +160,7 @@ async def retry_file(
     try:
         if settings.reviewer_email and await notify_reviewer(
             creds, settings, file.project_id, file.version, file.file_name,
-            evaluation_id, result.technical.heading, result.price.heading,
+            evaluation_id, result.payment.heading, result.service.heading,
         ):
             await repository.mark_notified(evaluation_id)
     except Exception:  # noqa: BLE001 — detection already persisted; notification is best-effort
@@ -177,7 +177,7 @@ async def resend_notification(
         raise ValueError('Evaluation not found')
     sent = await notify_reviewer(
         creds, settings, record.project_id, record.version, record.file_name or f'file {record.file_id}',
-        evaluation_id, record.technical_section_title, record.price_section_title,
+        evaluation_id, record.payment_section_title, record.service_section_title,
     )
     if sent:
         await repository.mark_notified(evaluation_id)

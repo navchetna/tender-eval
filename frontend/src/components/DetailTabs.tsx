@@ -10,7 +10,7 @@ import { PdfViewer } from "@/components/PdfViewer";
 import { ParsedTreeView } from "@/components/ParsedTreeView";
 import { getFileTree } from "@/lib/api";
 
-type Tab = "doc" | "tree" | "technical" | "price";
+type Tab = "doc" | "tree" | "payment" | "service";
 
 export function DetailTabs({
   file,
@@ -41,8 +41,8 @@ export function DetailTabs({
   const tabs: [Tab, string][] = [
     ["doc", "Document"],
     ...(tree ? ([["tree", "Parsed tree"]] as [Tab, string][]) : []),
-    ["technical", "Technical"],
-    ["price", "Price"],
+    ["payment", "Payment"],
+    ["service", "Service"],
   ];
 
   return (
@@ -83,21 +83,21 @@ export function DetailTabs({
           ) : (
             <Empty>No parsed tree available yet.</Empty>
           ))}
-        {tab === "technical" &&
+        {tab === "payment" &&
           (evaluation ? (
             <EvaluationSection
-              title={evaluation.technical_section_title}
-              content={evaluation.technical_section_content}
-              status={evaluation.technical_status}
+              title={evaluation.payment_section_title}
+              content={evaluation.payment_section_content}
+              status={evaluation.payment_status}
             />
           ) : (
-            <Empty>Not yet evaluated — technical section hasn&rsquo;t been detected for this file.</Empty>
+            <Empty>Not yet evaluated — payment compliance section hasn&rsquo;t been detected for this file.</Empty>
           ))}
-        {tab === "price" &&
+        {tab === "service" &&
           (evaluation ? (
-            <EvaluationSection title={evaluation.price_section_title} content={evaluation.price_section_content} status={evaluation.price_status} />
+            <EvaluationSection title={evaluation.service_section_title} content={evaluation.service_section_content} status={evaluation.service_status} />
           ) : (
-            <Empty>Not yet evaluated — price section hasn&rsquo;t been detected for this file.</Empty>
+            <Empty>Not yet evaluated — service compliance section hasn&rsquo;t been detected for this file.</Empty>
           ))}
       </div>
     </Card>

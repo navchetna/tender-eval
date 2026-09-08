@@ -50,7 +50,7 @@ export interface ProjectIn {
   project_name: string;
 }
 
-export type FileType = "TENDER" | "BID" | "UNKNOWN";
+export type FileType = "CIRCULAR" | "SUBMISSION" | "UNKNOWN";
 export type ProcessingStatus = "RECEIVED" | "PARSING" | "PARSED" | "PARSE_FAILED";
 
 export interface ProjectFileRecord {
@@ -68,7 +68,7 @@ export interface ProjectFileRecord {
   updated_at: string;
 }
 
-export type Topic = "technical" | "price";
+export type Topic = "payment" | "service";
 export type ReviewStatus = "SUGGESTED" | "APPROVED";
 
 export interface EvaluationRecord {
@@ -78,22 +78,22 @@ export interface EvaluationRecord {
   version: number;
   file_name: string | null;
   detection_model: string | null;
-  technical_section_title: string | null;
-  technical_section_content: string | null;
-  technical_ai_title: string | null;
-  technical_ai_content: string | null;
-  technical_status: ReviewStatus;
-  technical_corrected: boolean;
-  technical_reviewed_by: string | null;
-  technical_reviewed_at: string | null;
-  price_section_title: string | null;
-  price_section_content: string | null;
-  price_ai_title: string | null;
-  price_ai_content: string | null;
-  price_status: ReviewStatus;
-  price_corrected: boolean;
-  price_reviewed_by: string | null;
-  price_reviewed_at: string | null;
+  payment_section_title: string | null;
+  payment_section_content: string | null;
+  payment_ai_title: string | null;
+  payment_ai_content: string | null;
+  payment_status: ReviewStatus;
+  payment_corrected: boolean;
+  payment_reviewed_by: string | null;
+  payment_reviewed_at: string | null;
+  service_section_title: string | null;
+  service_section_content: string | null;
+  service_ai_title: string | null;
+  service_ai_content: string | null;
+  service_status: ReviewStatus;
+  service_corrected: boolean;
+  service_reviewed_by: string | null;
+  service_reviewed_at: string | null;
   notified_at: string | null;
   created_at: string;
   updated_at: string;
@@ -150,26 +150,28 @@ export interface SectionScoreResult {
   comparison: string;
 }
 
-export interface BidAssessment {
-  bidder: string;
+export type RiskLevel = "high" | "medium" | "low";
+
+export interface MerchantAssessment {
+  merchant: string;
+  risk_level: RiskLevel;
   score: number;
-  pros: string[];
-  cons: string[];
-  precautions: string[];
+  key_gaps: string[];
+  remediation_priorities: string[];
 }
 
-export interface ComparisonResult {
+export interface RiskTriageResult {
   project_id: string;
   version: number;
-  assessments: BidAssessment[];
-  recommended_bidder: string | null;
-  recommendation: string;
+  assessments: MerchantAssessment[];
+  audit_priority_order: string[];
+  summary: string;
 }
 
 export interface DefaultPrompts {
-  technical: string;
-  price: string;
-  comparison: string;
+  payment: string;
+  service: string;
+  triage: string;
 }
 
 // Shape of the parser's output_tree.json (see evaluation/tree_utils.py's docstring for the

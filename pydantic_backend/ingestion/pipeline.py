@@ -24,13 +24,13 @@ def parse_subject(subject: str) -> ProjectSubject:
 
 def _dedupe_attachment_names(attachments: list[Attachment]) -> list[Attachment]:
     """
-    A single email carrying one tender + multiple bidder PDFs can legitimately contain
-    two attachments with the identical file_name (e.g. two bidders both attach "bid.pdf").
+    A single email carrying one circular + multiple merchant PDFs can legitimately contain
+    two attachments with the identical file_name (e.g. two merchants both attach "submission.pdf").
     Downstream, both the Drive-upload dict (keyed by file_name) and the Postgres
     `UNIQUE (email_message_id, file_name)` constraint key off this name, so an unmodified
     duplicate would silently overwrite/drop the earlier attachment. Rename the 2nd+
     occurrence in-memory (before anything is uploaded or persisted) to keep every
-    attachment distinct: "bid.pdf" -> "bid (2).pdf" -> "bid (3).pdf", etc.
+    attachment distinct: "submission.pdf" -> "submission (2).pdf" -> "submission (3).pdf", etc.
     """
     seen_counts: dict[str, int] = {}
     deduped: list[Attachment] = []

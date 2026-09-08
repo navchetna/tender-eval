@@ -1,7 +1,8 @@
 """
-Builds the on-demand tender-vs-bid comparison view. Nothing here is persisted \u2014 it re-reads
-tender_evaluations/bid_evaluations (via EvaluationRepository) and computes the merged view
-fresh on every call.
+Builds the on-demand circular-vs-submissions comparison view. Nothing here is persisted \u2014 it
+re-reads circular_evaluations/submission_evaluations (via EvaluationRepository) and computes
+the merged view fresh on every call. ("tender" = the reference circular, "bid" = one merchant
+submission in the structural field names kept for frontend plumbing compatibility.)
 """
 from __future__ import annotations
 
@@ -16,9 +17,9 @@ from .models import NormalizedRow, NormalizedView
 
 
 def _content_for(record: EvaluationRecord, topic: Topic) -> tuple[str | None, str]:
-    if topic is Topic.technical:
-        return record.technical_section_content, record.technical_status
-    return record.price_section_content, record.price_status
+    if topic is Topic.payment:
+        return record.payment_section_content, record.payment_status
+    return record.service_section_content, record.service_status
 
 
 def _bid_label(record: EvaluationRecord, used: set[str]) -> str:
@@ -70,19 +71,19 @@ def _bid_row_fields(
 
 async def build_view(
     creds: LlmCredentials,
-    tender_repository: EvaluationRepository,
-    bid_repository: EvaluationRepository,
+    circular_repository: EvaluationRepository,
+    submission_repository: EvaluationRepository,
     project_id: str,
     version: int,
     topic: Topic,
 ) -> NormalizedView:
-    tender_records = await tender_repository.list_by_project_version(project_id, version)
+    tender_records = await circular_repository.list_by_project_version(project_id, version)
     if not tender_records:
-        raise ValueError('No tender evaluation found for this project/version')
+        raise ValueError('No circular evaluation found for this project/version')
     tender_record = tender_records[0]
     tender_content, tender_status = _content_for(tender_record, topic)
     if tender_status != 'APPROVED':
-        raise ValueError(f'Tender {topic.value} section has not been approved yet (status={tender_status})')
+        raise ValueError(f'Circular {topic.value} compliance section has not been approved yet (status={tender_status})')
 
     tender_rows = table_utils.parse_rows(tender_content or '')
     tender_texts = [row['text'] for row in tender_rows]
@@ -95,7 +96,7 @@ async def build_view(
                 seen_columns.add(key)
                 tender_columns.append(key)
 
-    bid_records = await bid_repository.list_by_project_version(project_id, version)
+    bid_records = await submission_repository.list_by_project_version(project_id, version)
     used_labels: set[str] = set()
     # bid_label -> ordered field names that bid actually contributed (across all its rows)
     bid_fields_by_label: dict[str, list[str]] = {}

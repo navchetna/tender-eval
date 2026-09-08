@@ -5,16 +5,16 @@ import type { EvaluationRecord, ProjectFileRecord } from "@/lib/types";
 
 export function ProjectStageTrack({
   currentFiles,
-  tenderEvals,
-  bidEvals,
+  circularEvals,
+  submissionEvals,
   compact,
 }: {
   currentFiles: ProjectFileRecord[];
-  tenderEvals: EvaluationRecord[];
-  bidEvals: EvaluationRecord[];
+  circularEvals: EvaluationRecord[];
+  submissionEvals: EvaluationRecord[];
   compact?: boolean;
 }) {
-  const segs = computeProjectSegments(currentFiles, tenderEvals, bidEvals);
+  const segs = computeProjectSegments(currentFiles, circularEvals, submissionEvals);
   return (
     <div>
       <div className="flex items-center gap-[3px]">

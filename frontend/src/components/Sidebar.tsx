@@ -61,7 +61,7 @@ export function Sidebar() {
       <Link href="/projects" className="flex flex-col items-center gap-[10px] px-2 pb-[18px]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={`${BASE_PATH}/intel-logo.svg`} alt="Intel" className="h-[44px] w-auto" />
-        <div className="text-center text-[15px] leading-[1.15] font-semibold">Tender Bid Evaluator</div>
+        <div className="text-center text-[15px] leading-[1.15] font-semibold">NPCI Merchant Compliance Evaluator</div>
       </Link>
       <div className="mt-[10px] flex flex-col gap-[2px]">
         <NavItem icon={LayoutGrid} label="Projects" href="/projects" active={pathname.startsWith("/projects")} />

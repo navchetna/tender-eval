@@ -1,6 +1,6 @@
 """
 Builds the compliance matrix for a project/version by reusing `normalization.service.build_view`
-(technical + price) and running each requirement row through the compliance-judgment LLM
+(payment + service) and running each requirement clause through the compliance-judgment LLM
 (`evaluation.compliance_client`). Nothing here is persisted — computed fresh on every call, same
 as the underlying normalized view.
 """
@@ -17,7 +17,7 @@ from ..llm_credentials import LlmCredentials
 from . import service as normalization_service
 from .models import MatrixData, NormalizedView
 
-_BAND_LABEL = {Topic.technical: 'Technical compliance', Topic.price: 'Price compliance'}
+_BAND_LABEL = {Topic.payment: 'Payment compliance', Topic.service: 'Service compliance'}
 _NO_RESPONSE_CELL = {'s': 'none', 't': 'No response', 'x': '', 'full': ''}
 _JUDGMENT_UNAVAILABLE_CELL = {
     's': 'none', 't': 'Not judged', 'x': '',
@@ -87,22 +87,22 @@ async def _rows_for_topic(
 
 async def build_matrix(
     creds: LlmCredentials,
-    tender_repository: EvaluationRepository,
-    bid_repository: EvaluationRepository,
+    circular_repository: EvaluationRepository,
+    submission_repository: EvaluationRepository,
     project_id: str,
     version: int,
 ) -> MatrixData:
     views: dict[Topic, NormalizedView] = {}
-    for topic in (Topic.technical, Topic.price):
+    for topic in (Topic.payment, Topic.service):
         try:
             views[topic] = await normalization_service.build_view(
-                creds, tender_repository, bid_repository, project_id, version, topic,
+                creds, circular_repository, submission_repository, project_id, version, topic,
             )
         except ValueError:
             continue  # topic not approved/available yet — skip its band entirely
 
     if not views:
-        raise ValueError('Neither technical nor price sections are approved yet for this project/version')
+        raise ValueError('Neither payment nor service compliance sections are approved yet for this project/version')
 
     bidders: list[str] = []
     seen: set[str] = set()
@@ -113,7 +113,7 @@ async def build_matrix(
                 bidders.append(label)
 
     rows: list[dict] = []
-    for topic in (Topic.technical, Topic.price):
+    for topic in (Topic.payment, Topic.service):
         view = views.get(topic)
         if view is None:
             continue

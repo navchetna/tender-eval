@@ -1,4 +1,4 @@
-"""PostgreSQL access for reviewers (shared across tender and bid evaluation flows)."""
+"""PostgreSQL access for reviewers (shared across circular and submission evaluation flows)."""
 from __future__ import annotations
 
 import uuid

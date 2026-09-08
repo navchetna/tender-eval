@@ -1,6 +1,5 @@
 import { loadAuth } from "./auth-storage";
 import type {
-  ComparisonResult,
   CurrentUser,
   DefaultPrompts,
   Employee,
@@ -15,6 +14,7 @@ import type {
   ProjectFileRecord,
   ProjectIn,
   ReviewDecision,
+  RiskTriageResult,
   SectionScoreResult,
   Topic,
 } from "./types";
@@ -156,24 +156,26 @@ export const assignProject = (projectId: string, employeeId: string) =>
     body: JSON.stringify({ employee_id: employeeId }),
   });
 
-export const getEvaluationsByProject = (docType: "tender" | "bid", projectId: string, version: number) =>
+export type DocType = "circular" | "submission";
+
+export const getEvaluationsByProject = (docType: DocType, projectId: string, version: number) =>
   request<EvaluationRecord[]>(`/evaluation/${docType}?project_id=${encodeURIComponent(projectId)}&version=${version}`);
 
-export const getPendingEvaluations = (docType: "tender" | "bid") =>
+export const getPendingEvaluations = (docType: DocType) =>
   request<EvaluationRecord[]>(`/evaluation/${docType}/pending`);
 
 export const getPendingReviewCount = () => request<{ count: number }>("/evaluation/pending/count");
 
-export const getEvaluation = (docType: "tender" | "bid", evaluationId: string) =>
+export const getEvaluation = (docType: DocType, evaluationId: string) =>
   request<EvaluationRecord>(`/evaluation/${docType}/${evaluationId}`);
 
-export const reviewEvaluation = (docType: "tender" | "bid", evaluationId: string, decision: ReviewDecision) =>
+export const reviewEvaluation = (docType: DocType, evaluationId: string, decision: ReviewDecision) =>
   request<EvaluationRecord>(`/evaluation/${docType}/${evaluationId}/review`, {
     method: "POST",
     body: JSON.stringify(decision),
   });
 
-export const notifyEvaluation = (docType: "tender" | "bid", evaluationId: string) =>
+export const notifyEvaluation = (docType: DocType, evaluationId: string) =>
   request<{ sent: boolean }>(`/evaluation/${docType}/${evaluationId}/notify`, { method: "POST" });
 
 export const getNormalizedView = (projectId: string, version: number, topic: Topic) =>
@@ -187,8 +189,8 @@ export const scoreSection = (projectId: string, version: number, topic: Topic, p
     body: JSON.stringify({ prompt: prompt || null }),
   });
 
-export const compareBids = (projectId: string, version: number, prompt?: string) =>
-  request<ComparisonResult>(`/normalization/${projectId}/${version}/compare`, {
+export const triageMerchants = (projectId: string, version: number, prompt?: string) =>
+  request<RiskTriageResult>(`/normalization/${projectId}/${version}/triage`, {
     method: "POST",
     body: JSON.stringify({ prompt: prompt || null }),
   });

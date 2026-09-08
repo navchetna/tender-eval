@@ -1,7 +1,7 @@
 """
 Parses a section's raw extracted text (markdown tables, or plain prose) into row-level
 items for the normalization view. Nothing here is persisted \u2014 it's re-parsed on every
-request from whatever is already stored in tender_evaluations/bid_evaluations.
+request from whatever is already stored in circular_evaluations/submission_evaluations.
 """
 from __future__ import annotations
 

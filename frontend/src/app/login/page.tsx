@@ -38,7 +38,7 @@ export default function LoginPage() {
           </div>
           <div>
             <div className="text-[13.5px] leading-[1.1] font-semibold">Reconcile</div>
-            <div className="text-[10.5px] text-ink-faint">tender ↔ bid</div>
+            <div className="text-[10.5px] text-ink-faint">merchant compliance</div>
           </div>
         </div>
         <h1 className="mb-1 text-[18px] font-semibold text-ink">Sign in</h1>

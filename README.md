@@ -1,70 +1,87 @@
-# Tender Evaluation
+# Merchant Compliance Evaluation (NPCI flavour)
 
-An AI-assisted pipeline that reads incoming tender and bid PDFs straight from Gmail, OCRs
-them into structured data, finds and aligns their Technical Requirements and Price sections
-across every bidder, and produces a plain-language, traceable comparison — with a human
-reviewer approving or correcting every AI suggestion along the way. Built as an extension of
+> This is the `merchant-eval` branch — a domain flavour of the tender-eval pipeline, adapted
+> for a regulator (NPCI) evaluating customer-facing merchants' compliance self-certification
+> submissions against a compliance circular. The pipeline stages are identical to `main`;
+> the reference document is a compliance circular instead of a tender, the N submissions are
+> merchant self-certifications instead of bids, the two topics are payment compliance and
+> service compliance instead of technical and price, and the final stage is a risk-triage
+> ranking ("who needs audit attention first") instead of an award recommendation.
+
+An AI-assisted pipeline that reads incoming compliance circulars and merchant
+self-certification PDFs straight from Gmail, OCRs them into structured data, finds and aligns
+their Payment Compliance and Service Compliance sections across every merchant, and produces a
+plain-language, traceable compliance matrix and risk-triage ranking — with a human reviewer
+approving or correcting every AI suggestion along the way. Built as an extension of
 the [Intel® AI for Enterprise Agent Toolkit](https://github.com/intel/enterprise-agent-toolkit),
 so the OCR, LLM, and PDF-parsing infrastructure it depends on is shared, centrally-managed
 capacity rather than something each deployment stands up itself.
 
 **What you get:**
-- **Ingest by email or upload** — drop a tender + bid PDFs in Gmail and the background
+- **Ingest by email or upload** — drop a circular + submission PDFs in Gmail and the background
   worker versions and files them automatically, or upload them directly from the UI when
   you'd rather not wait on the inbox poll — both land in the same versioned pipeline.
 - **Layout-aware OCR** — a vision-language model turns each PDF into Markdown, a table of
   contents, and a structured tree, so headings and tables survive, not just flattened text.
-- **AI-suggested, human-approved** — every automatic classification (which section is
-  Technical Requirements, which is Price) is a suggestion a reviewer confirms or corrects;
+- **AI-suggested, human-approved** — every automatic classification (which section is Payment Compliance, which is Service Compliance) is a suggestion a reviewer confirms or corrects;
   the AI never has the final say.
-- **Traceable comparisons** — the final side-by-side bidder comparison links back to the
-  exact section/row it came from, so "why was Bidder B marked non-compliant" always has an
-  answer.
+- **Traceable verdicts** — the per-clause compliance matrix and the final risk-triage ranking
+  link back to the exact section/clause they came from, so "why was Merchant B marked
+  non-compliant" always has an answer.
+- **Risk triage, not a winner** — a regulator doesn't award to one merchant; the final stage
+  ranks merchants by compliance risk with per-merchant gaps and remediation priorities, so
+  audit attention goes where it's needed first.
 - **Per-reviewer attribution** — every model call is billed/attributed to the reviewer, admin,
   or background worker that triggered it, on the toolkit's own shared gateway.
 
 ## Two deployment modes — pick your branch
 
-This is `main`, the **datacenter/enterprise** deployment: every LLM call routes to the
+This branch (`merchant-eval`) derives from `main` and keeps its **datacenter/enterprise**
+deployment model: every LLM call routes to the
 toolkit's pre-existing, centrally-hosted Qwen deployment, and the OCR model runs on that same
 shared cluster (deployed via [`install/helm/`](install/helm), specifically for this app —
 see there for why) rather than anywhere near the reviewer's own machine. There's also an
 **`Ervin0307/aipc`** branch that instead runs every model on-device (Intel NPU + Arc GPU, plus
 one optional cloud call) for a single-machine AI PC demo. The two are intentionally separate and not
 meant to be merged — if you're standing up a laptop/workstation demo rather than a shared,
-centrally-managed deployment, use that branch instead; this README only covers `main`.
+centrally-managed deployment, use that branch instead; this README covers the `merchant-eval`
+flavour (the original tender/bid flavour lives on `main`).
 
 ## Problem statement
 
-Large companies run tenders to procure infrastructure. To reduce bias and pick the best bid,
-every bidder's proposal has to be checked against the tender's own technical requirements,
-and the pricing has to be compared on a level footing. Done by hand, this means a reviewer
-reads a tender PDF (often 50+ pages) and every competing bid PDF, hunts down the
-"Technical Requirements" and "Price/Commercial" sections in each one (every vendor's PDF
-formats and headings differently), and manually cross-references line items — slow,
-inconsistent between reviewers, and hard to justify after the fact ("why was Bidder B
-marked non-compliant on row 12?").
+A payments regulator/operator like NPCI oversees thousands of customer-facing merchants, each
+periodically required to self-certify compliance with payment obligations (settlement
+timelines, reconciliation, PCI-DSS attestations, transaction security) and service obligations
+(grievance-redressal TATs, disclosures, refunds, mandatory app functionality). Done by hand,
+this means a compliance officer reads the governing circular (often 50+ pages) and every
+merchant's self-certification PDF, hunts down the payment- and service-compliance sections in
+each one (every merchant's PDF formats and headings differently), and manually cross-references
+each clause — slow, inconsistent between reviewers, impossible to scale across a merchant base,
+and hard to justify after the fact ("why was Merchant B marked non-compliant on clause
+PAY-03, and why is it being audited before Merchant A?").
 
 ## What this solution does
 
-1. **Ingest** — a tender email (and any number of bidder-response emails) arrives in Gmail and
-   the background worker picks up unread PDF attachments automatically, or a reviewer uploads
-   them directly from the UI; either way they're filed into a versioned project.
+1. **Ingest** — a compliance-circular email (and any number of merchant self-certification
+   emails) arrives in Gmail and the background worker picks up unread PDF attachments
+   automatically, or a reviewer uploads them directly from the UI; either way they're filed
+   into a versioned project.
 2. **Parse** — each PDF is OCR'd by a vision-language model into Markdown plus a structured
    tree + table-of-contents, so the document's actual layout (sections, tables, headings) is
    preserved as data, not just flattened text.
 3. **Detect** — an LLM reads the table of contents and picks out which heading covers
-   Technical Requirements and which covers Price/Commercial, for the tender and for every bid.
+   Payment Compliance and which covers Service Compliance, for the circular and for every submission.
 4. **Review** — a human reviewer is notified by email and approves or corrects each AI
    suggestion (per document, per topic) — the AI never has the final say.
-5. **Normalize & compare** — once a tender and its bids are approved, their technical rows
-   and price rows are aligned to each other and judged for compliance, and a plain-language
-   comparison across bidders is produced — all traceable back to the exact section/row it
-   came from, so a reviewer can see *why*, not just *what*.
+5. **Normalize & triage** — once a circular and its submissions are approved, their payment
+   and service clauses are aligned to each other and judged for compliance per merchant, each
+   merchant's section is scored 0-100, and a risk-triage ranking across merchants (risk level,
+   key gaps, remediation priorities, audit-priority order) is produced — all traceable back to
+   the exact section/clause it came from, so a reviewer can see *why*, not just *what*.
 
 ## Architecture Flow
 
-A component view of the deployment, in three layers: the **Tender-Eval solution** (frontend +
+A component view of the deployment, in three layers: the **Merchant-Eval solution** (frontend +
 backend, with Pydantic Logfire observability), the **Pydantic tasks** it invokes — each one a
 pydantic-ai agent (except rule-based classification) — and the **Intel® AI for Enterprise
 Agent Toolkit** that serves the models behind them. PDF parsing is a standalone task (the
@@ -90,7 +107,7 @@ Both model-backed stages are reached purely by URL + credentials:
 | Stage | Backing service | Config |
 |---|---|---|
 | PDF OCR/parsing | A standalone docling-based parsing task (same one as the AIPC branch), packaged as a Helm chart (`install/helm/pdf-pipeline/`) and deployed onto the toolkit's cluster, backed by an OCR model registered on the toolkit's LiteLLM gateway (`install/helm/lighton-ocr/`) — **not** a component the toolkit ships itself | `PARSER_BASE_URL=https://ei-api.mg2.eglb.intel.com/pdf-pipeline` |
-| All LLM calls (section detection, row/header matching, judgment, scoring, comparison, notification drafting) | Enterprise agentic toolkit's LiteLLM gateway | `LITELLM_BASE_URL=https://ei-api.mg2.eglb.intel.com/v1`, `LITELLM_MODEL=Qwen/Qwen3-30B-A3B-Instruct-2507` |
+| All LLM calls (section detection, row/header matching, judgment, scoring, risk triage, notification drafting) | Enterprise agentic toolkit's LiteLLM gateway | `LITELLM_BASE_URL=https://ei-api.mg2.eglb.intel.com/v1`, `LITELLM_MODEL=Qwen/Qwen3-30B-A3B-Instruct-2507` |
 
 There's no fast/quality model split in this app's own code the way there is on the AIPC
 branch — every call asks the gateway directly for **Qwen/Qwen3-30B-A3B-Instruct-2507** (a
@@ -101,7 +118,7 @@ it gets deployed). What *does* vary per call is **whose key** makes it:
 - **Each employee has their own LiteLLM key**, assigned by an admin when the employee is
   created (`POST /employees`) and stored encrypted at rest (Fernet, via
   `LITELLM_KEY_ENCRYPTION_KEY`). Every LLM call an employee triggers (approving a section,
-  running a comparison, etc.) is authenticated with *their* key, so usage/spend on the
+  running a risk triage, etc.) is authenticated with *their* key, so usage/spend on the
   shared gateway is attributed to the person who caused it, not a shared app-wide key.
 - **The unattended background worker** (the periodic parse/detect/notify loop — see
   `PARSE_WORKER_ENABLED` below) has no logged-in employee to attribute calls to, so it uses
@@ -129,7 +146,7 @@ organization already runs one.
 
 #### 0. Stand up the enterprise agent toolkit
 
-Tender Evaluation is packaged as an **extension of the
+Circular Evaluation is packaged as an **extension of the
 [Intel® AI for Enterprise Agent Toolkit](https://github.com/intel/enterprise-agent-toolkit)**:
 every LLM call goes to the toolkit's GenAI Gateway (LiteLLM), and every PDF parse goes to a
 PDF pipeline deployed alongside it on the same cluster. That PDF pipeline is not part of the
@@ -159,7 +176,7 @@ pipeline exist until you deploy them, so that deployment is prerequisite zero.
 
    `cpu-qwen3-30b-a3b` is the toolkit's pre-validated catalog name for
    `Qwen/Qwen3-30B-A3B-Instruct-2507`, served by vLLM on Xeon — the model every stage of
-   this app (section detection, row/header alignment, judgment, scoring, comparison,
+   this app (section detection, row/header alignment, judgment, scoring, risk triage,
    notification drafting) runs against.
 
 3. **Deploy** — `./deploy-agentic-stack.sh`, then verify per the toolkit's
@@ -208,7 +225,7 @@ In the reference deployment all of this resolves to `ei-api.mg2.eglb.intel.com`
   and the frontend's `NEXT_PUBLIC_API_BASE_URL` build arg in `docker-compose.yaml` to your
   own hostnames — this project doesn't provide or assume any specific domain.
 
-### Bring up the tender-eval application
+### Bring up the circular-eval application
 
 This is the reference deployment path — the same kind of cluster the enterprise agent
 toolkit itself runs on (Prerequisite 0), so the backend and frontend land next to it rather
@@ -223,7 +240,7 @@ schema (once), and verifies. It's idempotent — safe to re-run any time you cha
 cd ../k8s
 cp backend.env.example backend.env   # fill in the values the script tells you are still blank
 ./install.sh
-kubectl -n tender-bid get pods -w  # wait for backend and frontend to go Ready
+kubectl -n circular-submission get pods -w  # wait for backend and frontend to go Ready
 ```
 
 **If you ran `install.sh` above, you're done — skip to [Add reviewers](#add-reviewers).**
@@ -272,5 +289,28 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3002   # frontend — 
 kubectl apply -k install/k8s   # after the build/push + secrets steps in install/k8s/README.md
 ```
 
-From here, the day-to-day usage flow (ingest → parse → detect → review → compare) is
+From here, the day-to-day usage flow (ingest → parse → detect → review → triage) is
 documented in [`pydantic_backend/README.md`](pydantic_backend/README.md).
+
+## Demo documents
+
+[`merchant-eval-docs/`](merchant-eval-docs) contains everything needed to run the flow end to end:
+
+- **`NPCI-UPI-Procedural-Guidelines-Circular.pdf`** — the real NPCI UPI Procedural Guidelines
+  (62 pages), used as the reference circular. Payment-compliance material lives in
+  "Settlement of UPI transactions" / Annexure I (Settlement & Reports) / Annexure XIII
+  (Security Considerations); service-compliance material in "Customer Complaints" /
+  Annexure XIV (App Checklist). Source mirror (npci.org.in blocks non-browser downloads):
+  <https://yashada.org/yashada_2019/pdfs/e_library_cit/edpri_UPI_Procedural_Guidelines.pdf>
+- **`QuickKart-merchant-self-certification.pdf`** / **`PayZippy-merchant-self-certification.pdf`**
+  — synthetic merchant self-certifications keyed to the circular's clauses, generated by
+  [`scripts/make_demo_docs.py`](scripts/make_demo_docs.py) (`pip install fpdf2`, then
+  `python3 scripts/make_demo_docs.py`). QuickKart is authored substantially compliant with
+  evidence references; PayZippy carries deliberate gaps (expired PCI-DSS AOC, T+2 settlement,
+  grievance-TAT breaches) so the compliance matrix and risk-triage ranking show real signal.
+- **`KPMG-UPI-Compliance-Framework-2025-reference.pdf`** — background reading on the UPI
+  information-security compliance framework; not part of the pipeline input.
+
+File names matter for the Gmail path: ingestion classifies attachments by name
+(`circular`/`checklist`/`guidelines` ⇒ CIRCULAR; `certification`/`merchant`/`submission` ⇒
+SUBMISSION). Direct UI uploads choose the type explicitly.

@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     parse_batch_size: int = 5
     parse_max_attempts: int = 3
 
-    # --- Tender/bid evaluation (stage 3): LiteLLM gateway (enterprise agentic toolkit) ---
+    # --- Circular/submission evaluation (stage 3): LiteLLM gateway (enterprise agentic toolkit) ---
     litellm_base_url: str = 'https://ei-api.mg2.eglb.intel.com/v1'
     litellm_model: str = 'Qwen/Qwen3-30B-A3B-Instruct-2507'
     litellm_verify_tls: bool = False

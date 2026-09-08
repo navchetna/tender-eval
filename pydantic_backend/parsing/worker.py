@@ -1,8 +1,8 @@
 """
-Background pipeline worker: periodically parses pending PDFs, then runs technical/price
-section-detection for newly-parsed tender and bid files. This is what lets uploaded documents
-progress on their own (RECEIVED -> PARSED -> SUGGESTED evaluations) without an admin manually
-clicking "process pending" after every upload.
+Background pipeline worker: periodically parses pending PDFs, then runs payment/service
+compliance section-detection for newly-parsed circular and submission files. This is what lets
+uploaded documents progress on their own (RECEIVED -> PARSED -> SUGGESTED evaluations) without
+an admin manually clicking "process pending" after every upload.
 """
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import asyncio
 import logfire
 
 from ..config import Settings
-from ..evaluation.repository import bid_repository, tender_repository
+from ..evaluation.repository import circular_repository, submission_repository
 from ..evaluation.service import process_pending as process_pending_evaluations
 from ..llm_credentials import worker_llm_credentials
 from .service import process_pending as process_pending_parses
@@ -37,8 +37,8 @@ async def run_worker(settings: Settings, stop: asyncio.Event) -> None:
     creds = worker_llm_credentials(settings)
     while not stop.is_set():
         await _run_stage('parse', process_pending_parses(settings, creds))
-        await _run_stage('evaluate_tender', process_pending_evaluations(creds, settings, tender_repository(settings)))
-        await _run_stage('evaluate_bid', process_pending_evaluations(creds, settings, bid_repository(settings)))
+        await _run_stage('evaluate_circular', process_pending_evaluations(creds, settings, circular_repository(settings)))
+        await _run_stage('evaluate_submission', process_pending_evaluations(creds, settings, submission_repository(settings)))
         try:
             await asyncio.wait_for(stop.wait(), timeout=settings.parse_worker_interval_seconds)
         except asyncio.TimeoutError:

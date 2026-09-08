@@ -7,7 +7,7 @@ import logfire
 
 from ..config import Settings
 from ..evaluation.models import DocType
-from ..evaluation.repository import bid_repository, tender_repository
+from ..evaluation.repository import circular_repository, submission_repository
 from ..evaluation.service import detect_and_store
 from ..ingestion import drive
 from ..llm_credentials import LlmCredentials
@@ -94,9 +94,9 @@ async def _trigger_detection(settings: Settings, creds: LlmCredentials, file: Pe
     here is just an extra guard against anything upstream of it (e.g. picking a repository).
     """
     try:
-        if file.file_type not in (DocType.tender.value, DocType.bid.value):
+        if file.file_type not in (DocType.circular.value, DocType.submission.value):
             return
-        repository = tender_repository(settings) if file.file_type == DocType.tender.value else bid_repository(settings)
+        repository = circular_repository(settings) if file.file_type == DocType.circular.value else submission_repository(settings)
         eval_file = await repository.get_file_for_retry(file.file_id)
         if eval_file is None:
             return

@@ -5,14 +5,14 @@ import type { EvaluationRecord, ProjectFileRecord } from "@/lib/types";
 // backend-side — those stages are approximated from file processing_status + evaluation review
 // status, since that's genuinely what each milestone depends on):
 //   Received  — at least one current-version file exists
-//   Parsed    — every current-version file (tender + bids) has finished parsing
-//   Sections  — technical/price sections have been detected for every current-version file
-//   Clauses   — the tender's detected sections are fully reviewed/approved
-//   Aligned   — at least one bid is also fully approved, so a tender-vs-bid comparison exists
+//   Parsed    — every current-version file (circular + submissions) has finished parsing
+//   Sections  — payment/service compliance sections have been detected for every current-version file
+//   Clauses   — the circular's detected sections are fully reviewed/approved
+//   Aligned   — at least one merchant submission is also fully approved, so a circular-vs-submission comparison exists
 export function computeProjectSegments(
   currentFiles: ProjectFileRecord[],
-  tenderEvals: EvaluationRecord[],
-  bidEvals: EvaluationRecord[]
+  circularEvals: EvaluationRecord[],
+  submissionEvals: EvaluationRecord[]
 ): Seg[] {
   const segs: Seg[] = Array(5).fill("todo");
   if (currentFiles.length === 0) return segs;
@@ -30,33 +30,33 @@ export function computeProjectSegments(
   }
   segs[1] = "done"; // Parsed
 
-  const bidFileCount = currentFiles.filter((f) => f.file_type === "BID").length;
-  const hasTenderEval = tenderEvals.length > 0;
-  if (!hasTenderEval || (bidFileCount > 0 && bidEvals.length === 0)) {
+  const submissionFileCount = currentFiles.filter((f) => f.file_type === "SUBMISSION").length;
+  const hasCircularEval = circularEvals.length > 0;
+  if (!hasCircularEval || (submissionFileCount > 0 && submissionEvals.length === 0)) {
     segs[2] = "active";
     return segs;
   }
   segs[2] = "done"; // Sections
 
-  const tenderApproved = tenderEvals.length > 0 && tenderEvals.every(isFullyApproved);
-  if (!tenderApproved) {
+  const circularApproved = circularEvals.length > 0 && circularEvals.every(isFullyApproved);
+  if (!circularApproved) {
     segs[3] = "active";
     return segs;
   }
   segs[3] = "done"; // Clauses
 
-  const anyBidApproved = bidEvals.some(isFullyApproved);
-  segs[4] = anyBidApproved ? "done" : bidEvals.length > 0 ? "active" : "todo";
+  const anySubmissionApproved = submissionEvals.some(isFullyApproved);
+  segs[4] = anySubmissionApproved ? "done" : submissionEvals.length > 0 ? "active" : "todo";
   return segs;
 }
 
 export function isFullyApproved(e: EvaluationRecord): boolean {
-  return e.technical_status === "APPROVED" && e.price_status === "APPROVED";
+  return e.payment_status === "APPROVED" && e.service_status === "APPROVED";
 }
 
 /** A project is "completed" once it's reached the final (Aligned) stage. */
-export function isProjectCompleted(currentFiles: ProjectFileRecord[], tenderEvals: EvaluationRecord[], bidEvals: EvaluationRecord[]): boolean {
-  return computeProjectSegments(currentFiles, tenderEvals, bidEvals)[4] === "done";
+export function isProjectCompleted(currentFiles: ProjectFileRecord[], circularEvals: EvaluationRecord[], submissionEvals: EvaluationRecord[]): boolean {
+  return computeProjectSegments(currentFiles, circularEvals, submissionEvals)[4] === "done";
 }
 
 // Maps the 5-segment project ladder onto PipelineRibbon's 6 pipeline stages (Ingest & parse,

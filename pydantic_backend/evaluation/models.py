@@ -1,4 +1,4 @@
-"""Data models for the tender technical/price section detection + human review stage."""
+"""Data models for the circular payment/service compliance section detection + human review stage."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -10,26 +10,26 @@ from ..auth.models import Role
 
 
 class Topic(StrEnum):
-    technical = 'technical'
-    price = 'price'
+    payment = 'payment'
+    service = 'service'
 
 
 class DocType(StrEnum):
     """Which document a section-detection evaluation is for."""
 
-    tender = 'TENDER'
-    bid = 'BID'
+    circular = 'CIRCULAR'
+    submission = 'SUBMISSION'
 
 
 class ReviewStatus(StrEnum):
-    """Lifecycle of a single topic's (technical/price) section suggestion."""
+    """Lifecycle of a single topic's (payment/service) section suggestion."""
 
     suggested = 'SUGGESTED'  # AI proposed, awaiting human review
     approved = 'APPROVED'  # human confirmed the AI suggestion, or a correction
 
 
 class PendingFile(BaseModel):
-    """A PARSED file_repository row (tender or bid) that has no evaluation yet."""
+    """A PARSED file_repository row (circular or submission) that has no evaluation yet."""
 
     file_id: str
     project_id: str
@@ -48,8 +48,8 @@ class SectionSuggestion(BaseModel):
 
 
 class DetectionResult(BaseModel):
-    technical: SectionSuggestion
-    price: SectionSuggestion
+    payment: SectionSuggestion
+    service: SectionSuggestion
     model: str
 
 
@@ -60,22 +60,22 @@ class EvaluationRecord(BaseModel):
     version: int
     file_name: str | None = None
     detection_model: str | None
-    technical_section_title: str | None
-    technical_section_content: str | None
-    technical_ai_title: str | None = None  # original AI suggestion, preserved even after a correction
-    technical_ai_content: str | None = None
-    technical_status: ReviewStatus
-    technical_corrected: bool
-    technical_reviewed_by: str | None
-    technical_reviewed_at: datetime | None
-    price_section_title: str | None
-    price_section_content: str | None
-    price_ai_title: str | None = None
-    price_ai_content: str | None = None
-    price_status: ReviewStatus
-    price_corrected: bool
-    price_reviewed_by: str | None
-    price_reviewed_at: datetime | None
+    payment_section_title: str | None
+    payment_section_content: str | None
+    payment_ai_title: str | None = None  # original AI suggestion, preserved even after a correction
+    payment_ai_content: str | None = None
+    payment_status: ReviewStatus
+    payment_corrected: bool
+    payment_reviewed_by: str | None
+    payment_reviewed_at: datetime | None
+    service_section_title: str | None
+    service_section_content: str | None
+    service_ai_title: str | None = None
+    service_ai_content: str | None = None
+    service_status: ReviewStatus
+    service_corrected: bool
+    service_reviewed_by: str | None
+    service_reviewed_at: datetime | None
     notified_at: datetime | None
     created_at: datetime
     updated_at: datetime
