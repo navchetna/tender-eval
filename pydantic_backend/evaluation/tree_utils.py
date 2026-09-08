@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import html
 import json
+import re
 from collections.abc import Sequence
 from difflib import SequenceMatcher
 from typing import Any
@@ -34,18 +35,32 @@ _MATCH_THRESHOLD = 0.55
 _LINE_MATCH_THRESHOLD = 0.8
 
 
-def _flatten(children: list[Any]) -> list[tuple[str, dict]]:
-    """Recursively flatten a list of single-key heading->node dicts into (heading, node) pairs."""
-    result: list[tuple[str, dict]] = []
+def _flatten(children: list[Any]) -> list[tuple[str, dict, list[tuple[str, dict]]]]:
+    """
+    Recursively flatten a list of single-key heading->node dicts into
+    (heading, node, following_siblings) triples — following_siblings being the (heading, node)
+    pairs that come AFTER this node in the same children list, in document order. Extraction
+    needs them because the parser often flattens numbered subsections ("2.1", "2.2") into
+    siblings of their "2." parent instead of nesting them under it.
+    """
+    pairs: list[tuple[str, dict]] = []
     for item in children or []:
         if not isinstance(item, dict):
             continue
         for heading, value in item.items():
-            if not isinstance(value, dict):
-                continue
-            result.append((heading, value))
-            result.extend(_flatten(value.get('children', [])))
+            if isinstance(value, dict):
+                pairs.append((heading, value))
+    result: list[tuple[str, dict, list[tuple[str, dict]]]] = []
+    for i, (heading, value) in enumerate(pairs):
+        result.append((heading, value, pairs[i + 1 :]))
+        result.extend(_flatten(value.get('children', [])))
     return result
+
+
+def _numbered_prefix(heading: str) -> str | None:
+    """Leading section number of a heading ("2.1 Settlement..." -> "2.1"), or None."""
+    match = re.match(r'\s*(\d+(?:\.\d+)*)', heading)
+    return match.group(1) if match else None
 
 
 def _collect_text(node: dict) -> str:
@@ -155,10 +170,11 @@ def find_section(
     best_ratio = 0.0
     best_heading: str | None = None
     best_node: dict | None = None
-    for node_heading, node_value in nodes:
+    best_siblings: list[tuple[str, dict]] = []
+    for node_heading, node_value, siblings_after in nodes:
         ratio = _ratio(node_heading, heading)
         if ratio > best_ratio:
-            best_ratio, best_heading, best_node = ratio, node_heading, node_value
+            best_ratio, best_heading, best_node, best_siblings = ratio, node_heading, node_value, siblings_after
 
     best_line_ratio = 0.0
     best_line_heading: str | None = None
@@ -166,7 +182,7 @@ def find_section(
     # Scan the root's own content too — for some documents (seen live with a long scanned
     # PDF) the parser emits NO hierarchy at all: zero child nodes, the whole text flat in
     # root.content with only inline "#" heading lines to go by.
-    scan_nodes = [node_value for _, node_value in nodes]
+    scan_nodes = [node_value for _, node_value, _ in nodes]
     if isinstance(root, dict):
         scan_nodes.append(root)
     for node_value in scan_nodes:
@@ -197,5 +213,20 @@ def find_section(
 
     if best_node is None or best_ratio < _MATCH_THRESHOLD:
         return None, None
-    return best_heading, _truncate_at_stop(_collect_text(best_node), best_heading or heading, stop_headings)
+
+    # The parser routinely flattens numbered subsections into SIBLINGS of their parent
+    # ("2. Payment..." followed by "2.1 ...", "2.2 ..." at the same level), which would leave
+    # a matched "2." section holding only its intro text. Pull in the following siblings whose
+    # section number is subordinate to the matched heading's, stopping at the first that isn't.
+    parts = [_collect_text(best_node)]
+    prefix = _numbered_prefix(best_heading or '')
+    if prefix:
+        for sibling_heading, sibling_value in best_siblings:
+            sibling_prefix = _numbered_prefix(sibling_heading)
+            if sibling_prefix is not None and sibling_prefix.startswith(f'{prefix}.'):
+                parts.append(f'{sibling_heading}\n{_collect_text(sibling_value)}')
+            else:
+                break
+    text = '\n'.join(p for p in parts if p)
+    return best_heading, _truncate_at_stop(text, best_heading or heading, stop_headings)
 
