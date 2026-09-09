@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Download, Loader2, Sparkles, Terminal, Upload } from "lucide-react";
 import { ApiError, exportMatrix, getDefaultPrompts, getNormalizedView, getProjects, triageMerchants } from "@/lib/api";
-import type { DefaultPrompts, MerchantAssessment, NormalizedView, Project, RiskLevel, RiskTriageResult, Topic } from "@/lib/types";
+import type { DefaultPrompts, MerchantAssessment, NormalizedRow, NormalizedView, Project, RiskLevel, RiskTriageResult, Topic } from "@/lib/types";
 import { Card } from "@/components/ui/Card";
 import { Empty } from "@/components/ui/Empty";
 import { toneClasses } from "@/lib/tone";
@@ -39,11 +39,197 @@ function groupSubmissionColumns(bidColumns: string[]): MerchantGroup[] {
   return groups;
 }
 
+/** Compliance tone of a self-certified value ("Compliant" / "Partial..." / "Non-compliant"), or null. */
+function statusTone(value: string): "ok" | "warn" | "bad" | null {
+  const v = value.trim();
+  if (/^non[\s-]?compliant/i.test(v)) return "bad";
+  if (/^partial/i.test(v)) return "warn";
+  if (/^compliant/i.test(v)) return "ok";
+  return null;
+}
+
+function StatusPill({ value }: { value: string }) {
+  const tone = statusTone(value);
+  if (!tone) return <>{value}</>;
+  const tn = toneClasses[tone];
+  return (
+    <span className={`inline-block text-[11px] font-semibold whitespace-nowrap uppercase ${tn.fg}`}>
+      {value}
+    </span>
+  );
+}
+
+/** Background tint for a merchant cell, so compliant (good) vs partial vs non-compliant reads
+as color at a glance across the whole matrix. */
+function statusCellClass(status: string | null | undefined): string {
+  const tone = status ? statusTone(status) : null;
+  return tone ? toneClasses[tone].bg : "";
+}
+
+const fold = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/** Strip the common trailing "-..." file-name suffix merchants share ("QuickKart-merchant-self-
+certification" / "PayZippy-merchant-self-certification" -> "QuickKart" / "PayZippy"). */
+function merchantDisplayNames(labels: string[]): Record<string, string> {
+  const parts = labels.map((l) => l.split("-"));
+  let k = 0;
+  while (
+    labels.length > 1 &&
+    parts.every((p) => p.length - 1 - k > 0) &&
+    new Set(parts.map((p) => p[p.length - 1 - k].toLowerCase())).size === 1
+  ) {
+    k++;
+  }
+  return Object.fromEntries(parts.map((p, i) => [labels[i], p.slice(0, p.length - k).join("-")]));
+}
+
+interface CompactMerchantCell {
+  status: string | null;
+  details: string[];
+}
+
+/**
+ * One display row of the compact checklist layout: the circular's heterogeneous per-table
+ * columns squeezed into ref / requirement / M-O, and each merchant's fields squeezed into a
+ * status + supporting details — dropping values that merely echo the circular row's own text.
+ */
+function toCompactRow(row: NormalizedRow, merchantGroups: MerchantGroup[]) {
+  const cells = Object.entries(row.tender_cells).filter(([, v]) => v);
+  let ref = "";
+  let mo = "";
+  const rest: string[] = [];
+  for (const [col, value] of cells) {
+    const f = fold(col);
+    if (!ref && f.startsWith("sr")) ref = value;
+    else if (!mo && (f.includes("mandatory") || f === "mo")) mo = value;
+    else rest.push(value);
+  }
+  rest.sort((a, b) => b.length - a.length);
+  const requirement = rest[0] ?? "";
+  const extras = rest.slice(1);
+
+  const echoes = new Set(cells.map(([, v]) => v.trim().toLowerCase()));
+  const merchants: Record<string, CompactMerchantCell> = {};
+  let hasResponse = false;
+  for (const g of merchantGroups) {
+    let status: string | null = null;
+    const details: string[] = [];
+    for (const { col } of g.fields) {
+      const value = row.bid_values[col];
+      if (!value) continue;
+      if (!status && statusTone(value)) {
+        status = value;
+        continue;
+      }
+      const trimmed = value.trim();
+      if (echoes.has(trimmed.toLowerCase())) continue; // echo of the circular row
+      if (/^[MO]$/i.test(trimmed)) continue; // echoed mandatory/optional flag
+      details.push(value);
+    }
+    if (status || details.length > 0) hasResponse = true;
+    merchants[g.bidder] = { status, details };
+  }
+  return { ref, requirement, mo, extras, merchants, hasResponse };
+}
+
+/**
+ * Checklist layout for sections made of many small tables (the circular columns are a sparse
+ * union across all of them): rows grouped under their circular headings, one requirement
+ * column, and a single column per merchant carrying a color-coded status plus its evidence.
+ */
+function CompactChecklistTable({ view }: { view: NormalizedView }) {
+  const merchantGroups = groupSubmissionColumns(view.bid_columns);
+  const displayName = merchantDisplayNames(merchantGroups.map((g) => g.bidder));
+  const columnCount = 3 + merchantGroups.length;
+  let previousGroup: string | null | undefined;
+  return (
+    <div className="overflow-x-auto rounded-[13px] border-[0.5px] border-line shadow-[0_1px_2px_rgba(30,28,24,.04)]">
+      <table className="w-full min-w-[680px] border-collapse">
+        <thead>
+          <tr className="bg-surface2">
+            <th className="w-[52px] border-b-[0.5px] border-line px-[12px] py-[9px] text-left text-[12.5px] font-medium text-ink">Ref</th>
+            <th className="min-w-[260px] border-b-[0.5px] border-line px-[14px] py-[9px] text-left text-[12.5px] font-medium text-ink">
+              Circular requirement
+            </th>
+            <th className="w-[48px] border-b-[0.5px] border-line px-[10px] py-[9px] text-left text-[12.5px] font-medium text-ink">M/O</th>
+            {merchantGroups.map((g) => (
+              <th
+                key={g.bidder}
+                className="min-w-[220px] border-b-[0.5px] border-l-[0.5px] border-line px-[14px] py-[9px] text-left text-[12.5px] font-semibold text-ink"
+                title={g.bidder}
+              >
+                {displayName[g.bidder]}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {view.rows.map((row, i) => {
+            const compact = toCompactRow(row, merchantGroups);
+            if (!compact.requirement && !compact.ref && !compact.hasResponse) return null; // parser fragment with nothing to show
+            const groupHeader =
+              row.tender_group !== previousGroup && row.tender_group ? (
+                <tr key={`g${i}`} className="border-t-[0.5px] border-line bg-surface2/60">
+                  <td colSpan={columnCount} className="px-[14px] py-[7px] text-[11.5px] font-semibold tracking-[0.4px] text-ink-soft uppercase">
+                    {row.tender_group}
+                  </td>
+                </tr>
+              ) : null;
+            previousGroup = row.tender_group;
+            return (
+              <Fragment key={i}>
+                {groupHeader}
+                <tr className="border-t-[0.5px] border-line align-top">
+                  <td className="border-b-[0.5px] border-line px-[12px] py-[10px] font-mono text-[11px] text-ink-faint">{compact.ref}</td>
+                  <td className="border-b-[0.5px] border-line px-[14px] py-[10px] text-[12.5px] leading-[1.45] text-ink">
+                    {compact.requirement || <span className="text-ink-faint">—</span>}
+                    {compact.extras.map((extra, j) => (
+                      <div key={j} className="mt-[3px] text-[11.5px] text-ink-faint">
+                        {extra}
+                      </div>
+                    ))}
+                  </td>
+                  <td className="border-b-[0.5px] border-line px-[10px] py-[10px] font-mono text-[11px] text-ink-soft">{compact.mo}</td>
+                  {merchantGroups.map((g) => {
+                    const cell = compact.merchants[g.bidder];
+                    return (
+                      <td
+                        key={g.bidder}
+                        className={`border-b-[0.5px] border-l-[0.5px] border-line px-[14px] py-[10px] text-[12px] leading-[1.45] text-ink-soft ${statusCellClass(cell.status)}`}
+                      >
+                        {!cell.status && cell.details.length === 0 && <span className="text-ink-faint italic">no response</span>}
+                        {cell.status && <StatusPill value={cell.status} />}
+                        {cell.details.map((detail, j) => (
+                          <div key={j} className={cell.status || j > 0 ? "mt-[4px]" : ""}>
+                            {detail}
+                          </div>
+                        ))}
+                      </td>
+                    );
+                  })}
+                </tr>
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function NormalizedTable({ view }: { view: NormalizedView }) {
   const merchantGroups = groupSubmissionColumns(view.bid_columns);
   if (view.rows.length === 0) {
     return <Empty>No rows found in the circular&apos;s parsed table for this section.</Empty>;
   }
+  // A section assembled from many small tables (a multi-level checklist) unions all their
+  // headers into one wide, sparse column set — unreadable as a plain grid, so it gets the
+  // dedicated checklist layout instead.
+  if (view.tender_columns.length > 6) {
+    return <CompactChecklistTable view={view} />;
+  }
+  const columnCount = view.tender_columns.length + view.bid_columns.length;
+  let previousGroup: string | null | undefined;
   return (
     <div className="overflow-x-auto rounded-[13px] border-[0.5px] border-line shadow-[0_1px_2px_rgba(30,28,24,.04)]">
       <table className="w-full min-w-[680px] border-collapse">
@@ -82,25 +268,42 @@ function NormalizedTable({ view }: { view: NormalizedView }) {
           </tr>
         </thead>
         <tbody>
-          {view.rows.map((row, i) => (
-            <tr key={i} className="border-t-[0.5px] border-line">
-              {view.tender_columns.map((col) => (
-                <td key={col} className="sticky left-0 min-w-[160px] border-b-[0.5px] border-line bg-surface px-[14px] py-[10px] align-top text-[12.5px] text-ink">
-                  {row.tender_cells[col] || <span className="text-ink-faint">—</span>}
-                </td>
-              ))}
-              {merchantGroups.map((g) =>
-                g.fields.map(({ col }) => (
-                  <td
-                    key={col}
-                    className="border-b-[0.5px] border-l-[0.5px] border-line px-[14px] py-[10px] align-top text-[12.5px] text-ink-soft"
-                  >
-                    {row.bid_values[col] || <span className="text-ink-faint italic">no response</span>}
+          {view.rows.map((row, i) => {
+            const groupHeader =
+              row.tender_group !== previousGroup && row.tender_group ? (
+                <tr key={`g${i}`} className="border-t-[0.5px] border-line bg-surface2/60">
+                  <td colSpan={columnCount} className="px-[14px] py-[7px] text-[11.5px] font-semibold tracking-[0.4px] text-ink-soft uppercase">
+                    {row.tender_group}
                   </td>
-                ))
-              )}
-            </tr>
-          ))}
+                </tr>
+              ) : null;
+            previousGroup = row.tender_group;
+            return (
+              <Fragment key={i}>
+                {groupHeader}
+                <tr className="border-t-[0.5px] border-line">
+                  {view.tender_columns.map((col) => (
+                    <td key={col} className="sticky left-0 min-w-[160px] border-b-[0.5px] border-line bg-surface px-[14px] py-[10px] align-top text-[12.5px] text-ink">
+                      {row.tender_cells[col] || <span className="text-ink-faint">—</span>}
+                    </td>
+                  ))}
+                  {merchantGroups.map((g) =>
+                    g.fields.map(({ col }) => {
+                      const value = row.bid_values[col];
+                      return (
+                        <td
+                          key={col}
+                          className={`border-b-[0.5px] border-l-[0.5px] border-line px-[14px] py-[10px] align-top text-[12.5px] text-ink-soft ${statusCellClass(value)}`}
+                        >
+                          {value ? <StatusPill value={value} /> : <span className="text-ink-faint italic">no response</span>}
+                        </td>
+                      );
+                    })
+                  )}
+                </tr>
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>

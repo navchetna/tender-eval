@@ -147,6 +147,7 @@ async def build_view(
         rows.append(NormalizedRow(
             tender_cells={col: tender_rows[i]['cells'].get(col, '') for col in visible_tender_columns},
             bid_values=bid_values,
+            tender_group=tender_rows[i].get('group'),
         ))
 
     return NormalizedView(

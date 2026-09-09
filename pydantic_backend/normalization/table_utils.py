@@ -5,9 +5,23 @@ request from whatever is already stored in circular_evaluations/submission_evalu
 """
 from __future__ import annotations
 
+import html
 import re
 
 _SEPARATOR_RE = re.compile(r'^\|?[\s:|-]+\|?$')
+
+
+def _group_heading(line: str) -> str | None:
+    """The group title if `line` is a markdown '#' heading or a whole-line **bold** label —
+    the way section documents introduce each of their tables ("## Level 2:- Home screen
+    checklist", "**Reports Availability:**")."""
+    stripped = line.strip()
+    if stripped.startswith('#'):
+        text = stripped.lstrip('#').strip()
+        return html.unescape(text) if text else None
+    if stripped.startswith('**') and stripped.endswith('**') and len(stripped) > 4:
+        return html.unescape(stripped.strip('*').strip())
+    return None
 
 
 def _split_row(line: str) -> list[str]:
@@ -51,10 +65,13 @@ def _parse_table_block(lines: list[str]) -> list[dict]:
 
 def parse_rows(content: str) -> list[dict]:
     """
-    Parse `content` into row-level items: [{"text": "<human-readable row>", "cells": {...}}, ...].
+    Parse `content` into row-level items:
+    [{"text": "<human-readable row>", "cells": {...}, "group": "<nearest preceding heading>"}, ...].
 
-    Contiguous blocks of lines starting with `|` are treated as markdown tables. If no table
-    is found at all, falls back to splitting on blank lines so prose-only sections still
+    Contiguous blocks of lines starting with `|` are treated as markdown tables; each table's
+    rows carry the nearest preceding heading/bold-label line as their "group", so a section
+    made of many small tables (a multi-level checklist) keeps its structure for display. If no
+    table is found at all, falls back to splitting on blank lines so prose-only sections still
     produce comparable "rows" instead of one giant blob.
     """
     if not content or not content.strip():
@@ -64,11 +81,14 @@ def parse_rows(content: str) -> list[dict]:
     rows: list[dict] = []
     block: list[str] = []
     found_table = False
+    current_group: str | None = None
 
     def _flush():
         nonlocal block
         if block:
-            rows.extend(_parse_table_block(block))
+            for row in _parse_table_block(block):
+                row['group'] = current_group
+                rows.append(row)
             block = []
 
     for line in lines:
@@ -77,10 +97,13 @@ def parse_rows(content: str) -> list[dict]:
             block.append(line)
         else:
             _flush()
+            heading = _group_heading(line)
+            if heading is not None:
+                current_group = heading
     _flush()
 
     if found_table:
         return rows
 
     paragraphs = [p.strip() for p in re.split(r'\n\s*\n', content) if p.strip()]
-    return [{'text': p, 'cells': {'text': p}} for p in paragraphs]
+    return [{'text': p, 'cells': {'text': p}, 'group': None} for p in paragraphs]

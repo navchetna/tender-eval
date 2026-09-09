@@ -13,6 +13,9 @@ from ..evaluation.models import Topic
 class NormalizedRow(BaseModel):
     tender_cells: dict[str, str]  # tender's own column headers -> values, in the tender's table column order
     bid_values: dict[str, str | None]  # "<bid_label>: <field>" -> matched value (or None if no match found)
+    # The heading the row's table sits under in the tender document ("Level 2:- Home screen
+    # checklist"), so a section made of many small tables keeps its structure in the UI.
+    tender_group: str | None = None
 
 
 class NormalizedView(BaseModel):

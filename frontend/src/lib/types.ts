@@ -124,6 +124,8 @@ export type FileStageDetail = Record<PipelineStage, StageDetail>;
 export interface NormalizedRow {
   tender_cells: Record<string, string>;
   bid_values: Record<string, string | null>;
+  /** Heading the row's table sits under in the circular ("Level 2:- Home screen checklist"). */
+  tender_group?: string | null;
 }
 
 export interface NormalizedView {
