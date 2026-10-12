@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     local_ocr_max_new_tokens: int = 4096
     anthropic_api_key: SecretStr = SecretStr('')
     anthropic_quality_model: str = 'claude-sonnet-4-5'
+    # Anthropic-API-compatible endpoint to use instead of api.anthropic.com — e.g. Claude on
+    # Azure AI Foundry: https://<resource>.openai.azure.com/anthropic (its key goes in
+    # anthropic_api_key). Unlike quality_llm_base_url below, this speaks Anthropic's Messages API.
+    anthropic_base_url: str = ''
     # Optional: route the in-process build's quality tier through an OpenAI-compatible gateway
     # (LiteLLM, an enterprise AI gateway) instead of calling Anthropic directly. When set,
     # quality_llm_api_key / quality_llm_model are used and anthropic_api_key is ignored.

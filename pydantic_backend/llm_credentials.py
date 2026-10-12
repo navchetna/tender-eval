@@ -54,7 +54,7 @@ def quality_llm_credentials(settings: Settings) -> LlmCredentials:
     if settings.model_runtime == 'inprocess':
         return LlmCredentials(
             api_key=settings.anthropic_api_key.get_secret_value(),
-            base_url='',
+            base_url=settings.anthropic_base_url,
             model=settings.anthropic_quality_model,
             provider='anthropic',
         )

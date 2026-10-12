@@ -35,15 +35,19 @@ def build_model(creds: LlmCredentials) -> Model:
 
         return in_process_model()
     if creds.provider == 'anthropic':
-        if not creds.api_key.startswith('sk-ant-'):
+        if not creds.api_key:
+            raise LlmConfigError('ANTHROPIC_API_KEY is not configured — the quality-tier model needs it.')
+        if not creds.base_url and not creds.api_key.startswith('sk-ant-'):
             # Fail fast with a fixable message instead of a 401 from api.anthropic.com. The usual
-            # cause is a LiteLLM/gateway key pasted here — that belongs in QUALITY_LLM_API_KEY.
+            # cause is a key for some other endpoint (Azure AI Foundry, a gateway) pasted here.
             raise LlmConfigError(
-                'ANTHROPIC_API_KEY is missing or is not an Anthropic API key (those start with '
-                '"sk-ant-"). To use a LiteLLM/enterprise gateway key instead, set '
-                'QUALITY_LLM_BASE_URL, QUALITY_LLM_API_KEY and QUALITY_LLM_MODEL in Settings.'
+                'ANTHROPIC_API_KEY is not an api.anthropic.com key (those start with "sk-ant-"). '
+                'For Claude on Azure AI Foundry, also set ANTHROPIC_BASE_URL '
+                '(https://<resource>.openai.azure.com/anthropic). For an OpenAI-compatible gateway '
+                '(LiteLLM), set QUALITY_LLM_BASE_URL, QUALITY_LLM_API_KEY and QUALITY_LLM_MODEL.'
             )
-        return AnthropicModel(creds.model, provider=AnthropicProvider(api_key=creds.api_key))
+        provider = AnthropicProvider(api_key=creds.api_key, base_url=creds.base_url.rstrip('/') or None)
+        return AnthropicModel(creds.model, provider=provider)
     provider = OpenAIProvider(
         base_url=creds.base_url, api_key=creds.api_key,
         http_client=httpx.AsyncClient(verify=creds.verify_tls),
