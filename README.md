@@ -91,7 +91,7 @@ once, and the compiled blobs are cached, so later starts load in seconds.
 
 ### Install and use
 
-**Download: [TenderEval-Setup-0.3.0.exe](https://github.com/navchetna/tender-eval/releases/download/desktop-v0.3.0/TenderEval-Setup-0.3.0.exe)** ([release notes](https://github.com/navchetna/tender-eval/releases/tag/desktop-v0.3.0)).
+**Download: [TenderEval-Setup-0.3.1.exe](https://github.com/navchetna/tender-eval/releases/download/desktop-v0.3.1/TenderEval-Setup-0.3.1.exe)** ([release notes](https://github.com/navchetna/tender-eval/releases/tag/desktop-v0.3.1)).
 
 **End-user guide: [docs/DESKTOP_INSTALL.md](docs/DESKTOP_INSTALL.md)**. It covers installing, every
 setting, Claude vs. on-device reasoning, Google setup and troubleshooting. In short:
@@ -102,7 +102,8 @@ setting, Claude vs. on-device reasoning, Google setup and troubleshooting. In sh
    [`desktop/config.env.example`](desktop/config.env.example). The real file holds secrets and
    is never committed.
 2. Launch **Tender Evaluation**. It runs in the system tray and opens `http://127.0.0.1:8011/`.
-3. Tray → **Connect Gmail…** runs the one-time Google sign-in.
+3. On the Projects page, **Connect Google** runs the one-time Google sign-in in the browser. No
+   scripts are needed.
 4. To change settings, use Start menu → **Tender Evaluation settings**, then restart the app
    (tray → **Quit**, relaunch).
 

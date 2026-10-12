@@ -32,9 +32,8 @@ class GoogleNotConnectedError(RuntimeError):
 def _credentials(settings: Settings) -> Credentials:
     if not settings.gmail_token_path.exists():
         raise GoogleNotConnectedError(
-            'Google Drive is not connected yet. Desktop app: set GMAIL_CLIENT_ID and '
-            'GMAIL_CLIENT_SECRET in Settings (tray icon), restart, then use "Connect Gmail...". '
-            'Server: run `python -m pydantic_backend.gmail_auth`.'
+            'Google Drive is not connected yet. On the Projects page, click "Connect Google" and '
+            'sign in (an admin needs to do this once).'
         )
     credentials = Credentials.from_authorized_user_file(
         settings.gmail_token_path, DRIVE_SCOPES

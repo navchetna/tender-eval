@@ -232,3 +232,13 @@ export const getReasoningModel = () => request<ReasoningModelState>("/settings/r
 
 export const setReasoningModel = (choice: ReasoningChoice) =>
   request<ReasoningModelState>("/settings/reasoning-model", { method: "PUT", body: JSON.stringify({ choice }) });
+
+/** Start the in-app Google sign-in; resolves to Google's consent URL. Google redirects back to
+ * this API's callback, which saves the token and returns the browser to `returnTo`. */
+export function startGoogleConnect(returnTo: string): Promise<{ auth_url: string }> {
+  const apiBase = new URL(BASE_URL || "/", window.location.href).toString().replace(/\/$/, "");
+  return request<{ auth_url: string }>("/ingestion/gmail/connect", {
+    method: "POST",
+    body: JSON.stringify({ redirect_uri: `${apiBase}/ingestion/gmail/callback`, return_to: returnTo }),
+  });
+}

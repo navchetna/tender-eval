@@ -1,4 +1,5 @@
 import asyncio
+import html
 import json
 from datetime import datetime, timezone
 
@@ -6,7 +7,7 @@ import bcrypt
 import logfire_api as logfire
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel
 from pydantic_ai.exceptions import ModelHTTPError
 
@@ -24,7 +25,9 @@ from .evaluation.service import process_pending as process_pending_evaluations
 from .evaluation.service import resend_notification
 from .evaluation.service import retry_file as retry_evaluation_file
 from .ingestion import drive
-from .ingestion.gmail import fetch_unread_pdf_emails, is_authorized as gmail_is_authorized
+from .ingestion.gmail import GoogleSignInError, fetch_unread_pdf_emails, is_authorized as gmail_is_authorized
+from .ingestion.gmail import finish_web_authorization as gmail_finish_web_authorization
+from .ingestion.gmail import start_web_authorization as gmail_start_web_authorization
 from .ingestion.pipeline import AlreadyIngestedError, persist_gmail_email
 from .ingestion.models import FileType, FileTypeUpdate, IncomingEmail, Project, ProjectFileRecord, ProjectIn, StoredFile
 from .ingestion.postgres import PostgresRepository
@@ -163,6 +166,46 @@ async def gmail_status(_admin: CurrentUser = Depends(require_admin)) -> dict[str
     """Whether a valid Gmail token is present, re-read from disk on every call — so this
     flips to `true` immediately after a token is copied into the running pod, no restart needed."""
     return {'authorized': gmail_is_authorized(get_settings())}
+
+
+class GoogleConnectRequest(BaseModel):
+    redirect_uri: str  # this API's /ingestion/gmail/callback, as the browser reaches it
+    return_to: str     # the UI page to come back to afterwards
+
+
+@app.post('/ingestion/gmail/connect')
+async def gmail_connect(body: GoogleConnectRequest, _admin: CurrentUser = Depends(require_admin)) -> dict[str, str]:
+    """Start the in-app Google sign-in (the UI's "Connect Google" button): returns Google's consent
+    URL for the browser to open. Google then redirects to /ingestion/gmail/callback."""
+    try:
+        return {'auth_url': gmail_start_web_authorization(get_settings(), body.redirect_uri, body.return_to)}
+    except GoogleSignInError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get('/ingestion/gmail/callback', response_class=HTMLResponse)
+async def gmail_callback(state: str = '', code: str = '', error: str = ''):
+    """Where Google sends the browser after consent. Unauthenticated by necessity (it's Google's
+    redirect, carrying no app credentials); the one-time `state` ties it to a sign-in an admin
+    started via /ingestion/gmail/connect."""
+    def page(message: str) -> HTMLResponse:
+        return HTMLResponse(
+            '<html><body style="font-family:system-ui;padding:40px;max-width:640px">'
+            f'<h2>Google sign-in</h2><p>{html.escape(message)}</p>'
+            '<p><a href="/">Back to Tender Evaluation</a></p></body></html>'
+        )
+
+    if error:
+        return page(f'Google sign-in was not completed ({error}). Click "Connect Google" in the app to try again.')
+    try:
+        return_to = await asyncio.to_thread(gmail_finish_web_authorization, get_settings(), state, code)
+    except GoogleSignInError as exc:
+        return page(str(exc))
+    except Exception as exc:  # noqa: BLE001 — e.g. Google rejected the code; show why, don't 500
+        logfire.exception('gmail callback: token exchange failed')
+        return page(f'Google sign-in failed: {exc}')
+    separator = '&' if '?' in return_to else '?'
+    return RedirectResponse(f'{return_to}{separator}google=connected', status_code=303)
 
 
 @app.post('/ingestion/poll-gmail')

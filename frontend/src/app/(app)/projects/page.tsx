@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { projectHref } from "@/lib/routes";
-import { Award, Check, ChevronDown, Clock, Mail, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Award, Check, ChevronDown, Clock, LogIn, Mail, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Pill } from "@/components/ui/Pill";
 import { Empty } from "@/components/ui/Empty";
@@ -19,6 +19,7 @@ import {
   getEmployees,
   getEvaluationsByProject,
   getGmailStatus,
+  startGoogleConnect,
   getProjectFiles,
   getProjects,
   pollGmail,
@@ -279,6 +280,31 @@ export default function ProjectsPage() {
     }
   };
 
+  const [connectingGoogle, setConnectingGoogle] = useState(false);
+
+  // Back from Google's consent screen (see /ingestion/gmail/callback): confirm, and drop the
+  // marker from the URL so a reload doesn't repeat the toast.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("google") !== "connected") return;
+    toast("Google connected — Gmail and Drive are ready");
+    params.delete("google");
+    const query = params.toString();
+    window.history.replaceState(null, "", window.location.pathname + (query ? `?${query}` : ""));
+    getGmailStatus().then((s) => setGmailAuthorized(s.authorized)).catch(() => setGmailAuthorized(false));
+  }, [toast]);
+
+  const onConnectGoogle = async () => {
+    setConnectingGoogle(true);
+    try {
+      const { auth_url } = await startGoogleConnect(window.location.href.split("?")[0]);
+      window.location.href = auth_url;
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Couldn't start Google sign-in");
+      setConnectingGoogle(false);
+    }
+  };
+
   const onCheckGmail = async () => {
     setCheckingGmail(true);
     try {
@@ -318,11 +344,21 @@ export default function ProjectsPage() {
           {user?.role === "ADMIN" && (
             <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
               <div className="flex items-center gap-[6px]">
-                <div className="flex min-w-[76px] justify-center">
-                  <Pill tone={gmailAuthorized === null ? "none" : gmailAuthorized ? "ok" : "bad"}>
-                    {gmailAuthorized === null ? "Checking…" : gmailAuthorized ? "Connected" : "Not authorized"}
-                  </Pill>
-                </div>
+                {gmailAuthorized === false ? (
+                  <button
+                    onClick={onConnectGoogle}
+                    disabled={connectingGoogle}
+                    title="Sign in with Google once to let the app read tender emails and store documents in Drive"
+                    className="btn flex items-center gap-[6px] rounded-[8px] border-[0.5px] border-accent bg-accent px-[10px] py-[6px] text-[12.5px] font-medium text-white disabled:opacity-60"
+                  >
+                    <LogIn size={14} />
+                    {connectingGoogle ? "Opening Google…" : "Connect Google"}
+                  </button>
+                ) : (
+                  <div className="flex min-w-[76px] justify-center">
+                    <Pill tone={gmailAuthorized === null ? "none" : "ok"}>{gmailAuthorized === null ? "Checking…" : "Connected"}</Pill>
+                  </div>
+                )}
                 <button
                   onClick={onCheckGmail}
                   disabled={checkingGmail}

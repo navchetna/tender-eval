@@ -16,7 +16,7 @@ Docker, WSL, Python, oneAPI or model servers.
 
 ## 1. Install
 
-1. Download **[TenderEval-Setup-0.3.0.exe](https://github.com/navchetna/tender-eval/releases/download/desktop-v0.3.0/TenderEval-Setup-0.3.0.exe)** (about 115 MB; newer versions are on the
+1. Download **[TenderEval-Setup-0.3.1.exe](https://github.com/navchetna/tender-eval/releases/download/desktop-v0.3.1/TenderEval-Setup-0.3.1.exe)** (about 115 MB; newer versions are on the
    [Releases page](https://github.com/navchetna/tender-eval/releases)) and run it. No administrator rights are needed; it installs for
    your Windows user only.
 2. Work through the wizard:
@@ -40,7 +40,6 @@ Docker, WSL, Python, oneAPI or model servers.
   arrow next to the clock. Right-click the icon for these options:
   - **Open Tender Evaluation**
   - The models' status
-  - **Connect Gmail…**
   - **Settings…**
   - **Open data folder**
   - **Open log**
@@ -100,19 +99,20 @@ Uploading and ingesting PDFs stores them in Google Drive, so the app needs a Goo
    the **Gmail API** and the **Google Drive API**.
 2. Go to **APIs & Services > Credentials > Create credentials > OAuth client ID**, with
    application type **Desktop app**.
-3. Put the client ID and secret into `GMAIL_CLIENT_ID` and `GMAIL_CLIENT_SECRET`, then restart
-   the app.
-4. Right-click the tray icon and choose **Connect Gmail…**. Sign in and approve the Gmail and
-   Drive permissions. If Google warns that the app isn't verified, choose
-   **Advanced > Go to …**; that's expected for your own OAuth client. You only need to do this
-   once.
+3. Enter the client ID and secret in the installer's **Gmail and Google Drive** page. If you
+   skipped that page, put them into `GMAIL_CLIENT_ID` and `GMAIL_CLIENT_SECRET` and restart the
+   app.
+4. In the app, open **Projects** and click **Connect Google** (top right). Sign in and approve
+   the Gmail and Drive permissions. Google sends you back to the app, which then shows
+   **Connected**. If Google warns that the app isn't verified, choose **Advanced > Go to …**;
+   that's expected for your own OAuth client. An admin only needs to do this once.
 
 ## Troubleshooting
 
 - **Something fails.** The page shows the reason. For more detail, open the tray icon's
   **Open log** (`%LOCALAPPDATA%\TenderEval\logs\tender-eval.log`).
-- **"Google Drive is not connected yet."** Fill in the Google settings, restart, then use
-  **Connect Gmail…**.
+- **"Google Drive is not connected yet."** Click **Connect Google** on the Projects page. If it
+  says the client ID is missing, add the Google settings and restart first.
 - **Can't sign in.** Check `ADMIN_EMAIL` and `ADMIN_PASSWORD` in `config.env`. Restart after
   changing them.
 - **A Claude error appears on the compliance matrix.** Check the [Claude options](#claude-options),

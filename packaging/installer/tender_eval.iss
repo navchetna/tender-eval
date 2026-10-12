@@ -12,7 +12,7 @@
 ; upgrade/reinstall an existing config.env is kept as-is and those pages are skipped.
 
 #define AppName "Tender Evaluation"
-#define AppVersion "0.3.0"
+#define AppVersion "0.3.1"
 #define AppPublisher "Tender Evaluation"
 #define AppExeName "TenderEval.exe"
 #define ConfigDir "{localappdata}\TenderEval"
@@ -96,7 +96,7 @@ begin
   GooglePage := CreateInputQueryPage(ClaudePage.ID,
     'Gmail and Google Drive (optional)', 'Needed to upload or ingest tender and bid PDFs.',
     'Use a Google Cloud OAuth client of type "Desktop app" with the Gmail API and Google Drive ' +
-    'API enabled. After installing, right-click the tray icon and choose "Connect Gmail..." once. ' +
+    'API enabled. After installing, click "Connect Google" on the app''s Projects page once. ' +
     'Leave empty to set up later.');
   GooglePage.Add('OAuth client ID:', False);
   GooglePage.Add('OAuth client secret:', True);
