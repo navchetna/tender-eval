@@ -140,10 +140,17 @@ python -m desktop.launcher          # the app
 python -m desktop.launcher setup    # just download + compile the models
 ```
 
-### Converting the OCR model
+### The on-device models
 
-The app downloads `LOCAL_OCR_MODEL_REPO` (default `ervin0307/LightOnOCR-3-0.8B-int8-ov`), a
-pre-converted OpenVINO IR. To produce it, in a separate venv with
+Both models download from Hugging Face on first run (or during install) into
+`%LOCALAPPDATA%\TenderEval\models`:
+
+| Setting | Default | What it is |
+|---|---|---|
+| `LOCAL_FAST_MODEL_REPO` | [`ervin0307/Qwen3-4B-Instruct-2507-int4-ov`](https://huggingface.co/ervin0307/Qwen3-4B-Instruct-2507-int4-ov) | Text model: section detection, matching, and on-device reasoning |
+| `LOCAL_OCR_MODEL_REPO` | [`ervin0307/LightOnOCR-3-0.8B-int8-ov`](https://huggingface.co/ervin0307/LightOnOCR-3-0.8B-int8-ov) | OCR model: an OpenVINO IR of [lightonai/LightOnOCR-3-0.8B](https://huggingface.co/lightonai/LightOnOCR-3-0.8B) (Apache-2.0) |
+
+To reproduce or update the OCR conversion, use a separate venv with
 `optimum-intel[openvino]>=2.2`, `transformers==5.2.*` and CPU torch:
 
 ```bash
