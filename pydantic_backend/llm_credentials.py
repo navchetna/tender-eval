@@ -44,6 +44,13 @@ def fast_llm_credentials(settings: Settings) -> LlmCredentials:
 
 def quality_llm_credentials(settings: Settings) -> LlmCredentials:
     """For judgment calls (judge_row, score_section, compare_bids) — routed to the cloud model."""
+    if settings.model_runtime == 'inprocess' and settings.quality_llm_base_url:
+        return LlmCredentials(
+            api_key=settings.quality_llm_api_key.get_secret_value(),
+            base_url=settings.quality_llm_base_url,
+            model=settings.quality_llm_model,
+            verify_tls=settings.quality_llm_verify_tls,
+        )
     if settings.model_runtime == 'inprocess':
         return LlmCredentials(
             api_key=settings.anthropic_api_key.get_secret_value(),

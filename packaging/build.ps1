@@ -35,7 +35,14 @@ Invoke-Step "Installing desktop requirements" { uv pip install --python .venv-de
 # 2. Static UI. NEXT_PUBLIC_API_BASE_URL=/api: the exe serves the API on the same origin.
 Push-Location frontend
 try {
-    Invoke-Step "Installing UI dependencies" { npm ci --no-audit --no-fund }
+    # `npm ci` wipes node_modules first, which on Windows intermittently fails with EBUSY when an
+    # editor/indexer/AV briefly holds a folder open - so only reinstall when the lockfile changed.
+    $installed = "node_modules\.package-lock.json"
+    if (-not (Test-Path $installed) -or (Get-Item package-lock.json).LastWriteTime -gt (Get-Item $installed).LastWriteTime) {
+        Invoke-Step "Installing UI dependencies" { npm ci --no-audit --no-fund }
+    } else {
+        Write-Host "[build] UI dependencies up to date"
+    }
     $env:NEXT_OUTPUT = "export"
     $env:NEXT_PUBLIC_API_BASE_URL = "/api"
     Invoke-Step "Building static UI" { npx next build }

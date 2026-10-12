@@ -7,6 +7,7 @@ import logfire_api as logfire
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic_ai.exceptions import ModelHTTPError
 
 from .auth.dependencies import get_current_user, get_fast_llm_credentials, get_quality_llm_credentials, invalidate_user_cache, require_admin
 from .auth.models import AssignReviewerRequest, CurrentUser, Role
@@ -25,6 +26,7 @@ from .ingestion.gmail import fetch_unread_pdf_emails, is_authorized as gmail_is_
 from .ingestion.pipeline import AlreadyIngestedError, persist_gmail_email
 from .ingestion.models import FileType, FileTypeUpdate, IncomingEmail, Project, ProjectFileRecord, ProjectIn, StoredFile
 from .ingestion.postgres import PostgresRepository
+from .llm_agent import LlmConfigError
 from .llm_credentials import LlmCredentials
 from .normalization import compare_client as normalization_compare_client
 from .normalization import compliance_service
@@ -60,6 +62,24 @@ async def _google_not_connected(_request: Request, exc: drive.GoogleNotConnected
     """Every Drive-backed endpoint (upload, PDF/tree/image downloads) needs the Google OAuth
     token; without it, say so instead of failing with a bare 500."""
     return JSONResponse(status_code=503, content={'detail': str(exc)})
+
+
+@app.exception_handler(LlmConfigError)
+async def _llm_misconfigured(_request: Request, exc: LlmConfigError) -> JSONResponse:
+    return JSONResponse(status_code=503, content={'detail': str(exc)})
+
+
+@app.exception_handler(ModelHTTPError)
+async def _llm_upstream_error(_request: Request, exc: ModelHTTPError) -> JSONResponse:
+    """A model provider/gateway rejected the call (bad key, quota, unknown model, outage) —
+    surface its own message as a 502 rather than an opaque 500."""
+    body = exc.body if isinstance(exc.body, dict) else {}
+    error = body.get('error') if isinstance(body.get('error'), dict) else {}
+    message = error.get('message') or str(exc.body or exc)
+    return JSONResponse(
+        status_code=502,
+        content={'detail': f'The {exc.model_name} model call failed ({exc.status_code}): {message}'},
+    )
 
 
 _worker_stop: asyncio.Event | None = None

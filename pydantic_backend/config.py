@@ -61,6 +61,13 @@ class Settings(BaseSettings):
     local_ocr_max_new_tokens: int = 4096
     anthropic_api_key: SecretStr = SecretStr('')
     anthropic_quality_model: str = 'claude-sonnet-4-5'
+    # Optional: route the in-process build's quality tier through an OpenAI-compatible gateway
+    # (LiteLLM, an enterprise AI gateway) instead of calling Anthropic directly. When set,
+    # quality_llm_api_key / quality_llm_model are used and anthropic_api_key is ignored.
+    quality_llm_base_url: str = ''
+    quality_llm_api_key: SecretStr = SecretStr('')
+    quality_llm_model: str = 'claude-sonnet-4-5'
+    quality_llm_verify_tls: bool = True
 
     # --- Auth (stage 4): HTTP Basic, bootstrapped admin account ---
     admin_email: str = ''

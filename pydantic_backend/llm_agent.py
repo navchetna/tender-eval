@@ -24,6 +24,10 @@ from .llm_credentials import LlmCredentials
 OutputT = TypeVar('OutputT', bound=BaseModel)
 
 
+class LlmConfigError(RuntimeError):
+    """A model tier is misconfigured (missing/wrong key) — app.py maps this to a 503."""
+
+
 def build_model(creds: LlmCredentials) -> Model:
     if creds.provider == 'openvino':
         # Imported lazily: the LiteLLM deployment doesn't install openvino-genai at all.
@@ -31,8 +35,14 @@ def build_model(creds: LlmCredentials) -> Model:
 
         return in_process_model()
     if creds.provider == 'anthropic':
-        if not creds.api_key:
-            raise RuntimeError('ANTHROPIC_API_KEY is not configured — the quality-tier model needs it')
+        if not creds.api_key.startswith('sk-ant-'):
+            # Fail fast with a fixable message instead of a 401 from api.anthropic.com. The usual
+            # cause is a LiteLLM/gateway key pasted here — that belongs in QUALITY_LLM_API_KEY.
+            raise LlmConfigError(
+                'ANTHROPIC_API_KEY is missing or is not an Anthropic API key (those start with '
+                '"sk-ant-"). To use a LiteLLM/enterprise gateway key instead, set '
+                'QUALITY_LLM_BASE_URL, QUALITY_LLM_API_KEY and QUALITY_LLM_MODEL in Settings.'
+            )
         return AnthropicModel(creds.model, provider=AnthropicProvider(api_key=creds.api_key))
     provider = OpenAIProvider(
         base_url=creds.base_url, api_key=creds.api_key,

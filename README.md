@@ -48,11 +48,11 @@ a single local LiteLLM proxy so the backend never talks to any model server dire
 always asks LiteLLM for `npu-qwen3-4b`, `lightonocr-1b`, or `claude-sonnet-4-5` and LiteLLM
 resolves where that actually lives.
 
-| Model | Where it runs | Serves | Used for |
-|---|---|---|---|
-| **LightOnOCR-2-1B** (GGUF) | Intel **Arc GPU**, via `llama.cpp`'s `llama-server` (SYCL backend) | Vision — PDF page images → Markdown | The entire OCR/parsing stage (`pdf-pipeline`, a separate service — see below) |
-| **Qwen3-4B-Instruct-2507** (OpenVINO IR, int4) | Intel **NPU**, via OpenVINO Model Server (OVMS) | Text — the "fast" tier | Technical/Price section detection, row/header alignment between tender and bid tables, drafting the reviewer notification email |
-| **Claude** (`claude-sonnet-4-5`) | Cloud (Anthropic, via LiteLLM) | Text — the "quality" tier | Per-row compliance judgment, section scoring, and the final cross-bidder comparison/explanation — the calls where reasoning quality matters more than latency |
+| Model                                                | Where it runs                                                               | Serves                                | Used for                                                                                                                                                       |
+| ---------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **LightOnOCR-2-1B** (GGUF)                     | Intel**Arc GPU**, via `llama.cpp`'s `llama-server` (SYCL backend) | Vision — PDF page images → Markdown | The entire OCR/parsing stage (`pdf-pipeline`, a separate service — see below)                                                                               |
+| **Qwen3-4B-Instruct-2507** (OpenVINO IR, int4) | Intel**NPU**, via OpenVINO Model Server (OVMS)                        | Text — the "fast" tier               | Technical/Price section detection, row/header alignment between tender and bid tables, drafting the reviewer notification email                                |
+| **Claude** (`claude-sonnet-4-5`)             | Cloud (Anthropic, via LiteLLM)                                              | Text — the "quality" tier            | Per-row compliance judgment, section scoring, and the final cross-bidder comparison/explanation — the calls where reasoning quality matters more than latency |
 
 Why one cloud call survives on an otherwise fully local stack: judging compliance and
 writing the final comparison is the highest-stakes reasoning step in the pipeline (it's what
@@ -72,16 +72,16 @@ extraction/matching, not judgment — runs entirely on-device.
 `TenderEval.exe` is one process that hosts what the Docker/WSL deployment spreads across seven
 services:
 
-| Docker/WSL deployment | Desktop build (`MODEL_RUNTIME=inprocess`) |
-|---|---|
-| OVMS serving Qwen3-4B on the NPU | `openvino_genai.LLMPipeline` in-process (`pydantic_backend/local_models/llm.py`), exposed to pydantic-ai as a `FunctionModel`, so every `structured_agent` call site is unchanged. JSON replies use grammar-constrained decoding (`StructuredOutputConfig`). |
-| llama.cpp `llama-server` (SYCL, oneAPI) + LightOnOCR-2 GGUF | `openvino_genai.VLMPipeline` in-process with **LightOnOCR-3-0.8B** (`local_models/ocr.py`). It's the same model family and the same empty-prompt "page → Markdown" contract. LightOnOCR-2's Pixtral architecture isn't supported by OpenVINO GenAI, but LightOnOCR-3-0.8B uses the Qwen3.5-VL architecture, which is. |
-| docling `pdf-pipeline` service + tree-parser | `parsing/local_parser.py`: pypdfium2 render → blank-page filter → OCR → TOC + `output_tree.json` (tree-parser's algorithm, ported without docling/torch). It produces the same artifacts, so detection and normalization are unchanged. |
-| LiteLLM proxy | Gone. The fast tier calls the in-process model, and the quality tier calls Anthropic directly (`ANTHROPIC_API_KEY`). |
-| Postgres container | Embedded PostgreSQL 18 (`pixeltable-pgserver`: bundled binaries, private data dir, random localhost port, started and stopped with the app). |
-| Next.js container | Static export (`NEXT_OUTPUT=export`), served by the backend at `/`, with the API under `/api` on the same origin. |
-| FastAPI container | The same app, run by uvicorn inside the exe (`desktop/launcher.py`). |
-| Logfire tracing | Not bundled. The backend imports `logfire_api`, which forwards to Logfire where it's installed (Docker) and is a no-op in the exe. |
+| Docker/WSL deployment                                        | Desktop build (`MODEL_RUNTIME=inprocess`)                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OVMS serving Qwen3-4B on the NPU                             | `openvino_genai.LLMPipeline` in-process (`pydantic_backend/local_models/llm.py`), exposed to pydantic-ai as a `FunctionModel`, so every `structured_agent` call site is unchanged. JSON replies use grammar-constrained decoding (`StructuredOutputConfig`).                                                           |
+| llama.cpp`llama-server` (SYCL, oneAPI) + LightOnOCR-2 GGUF | `openvino_genai.VLMPipeline` in-process with **LightOnOCR-3-0.8B** (`local_models/ocr.py`). It's the same model family and the same empty-prompt "page → Markdown" contract. LightOnOCR-2's Pixtral architecture isn't supported by OpenVINO GenAI, but LightOnOCR-3-0.8B uses the Qwen3.5-VL architecture, which is. |
+| docling`pdf-pipeline` service + tree-parser                | `parsing/local_parser.py`: pypdfium2 render → blank-page filter → OCR → TOC + `output_tree.json` (tree-parser's algorithm, ported without docling/torch). It produces the same artifacts, so detection and normalization are unchanged.                                                                                   |
+| LiteLLM proxy                                                | Gone. The fast tier calls the in-process model, and the quality tier calls Anthropic directly (`ANTHROPIC_API_KEY`).                                                                                                                                                                                                           |
+| Postgres container                                           | Embedded PostgreSQL 18 (`pixeltable-pgserver`: bundled binaries, private data dir, random localhost port, started and stopped with the app).                                                                                                                                                                                   |
+| Next.js container                                            | Static export (`NEXT_OUTPUT=export`), served by the backend at `/`, with the API under `/api` on the same origin.                                                                                                                                                                                                          |
+| FastAPI container                                            | The same app, run by uvicorn inside the exe (`desktop/launcher.py`).                                                                                                                                                                                                                                                           |
+| Logfire tracing                                              | Not bundled. The backend imports`logfire_api`, which forwards to Logfire where it's installed (Docker) and is a no-op in the exe.                                                                                                                                                                                              |
 
 There's no oneAPI on the target machine because the OpenVINO pip wheels already contain the
 runtime and its CPU/GPU/NPU plugins. The target machine needs only the regular Intel Arc/Iris
@@ -147,9 +147,9 @@ LiteLLM.
 
 ### Prerequisites: download the models
 
-| Model | Link |
-|---|---|
-| LightOnOCR-2-1B (GGUF, for llama.cpp) | https://huggingface.co/ervin0307/LightOnOCR-2-1B-GGUF |
+| Model                                          | Link                                                            |
+| ---------------------------------------------- | --------------------------------------------------------------- |
+| LightOnOCR-2-1B (GGUF, for llama.cpp)          | https://huggingface.co/ervin0307/LightOnOCR-2-1B-GGUF           |
 | Qwen3-4B-Instruct-2507 (OpenVINO IR, for OVMS) | https://huggingface.co/ervin0307/Qwen3-4B-Instruct-2507-int4-ov |
 
 For LightOnOCR you need **two files** from that repo: the quantized model itself (e.g.
