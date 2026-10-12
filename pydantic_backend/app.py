@@ -4,9 +4,9 @@ from datetime import datetime, timezone
 
 import bcrypt
 import logfire_api as logfire
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from .auth.dependencies import get_current_user, get_fast_llm_credentials, get_quality_llm_credentials, invalidate_user_cache, require_admin
 from .auth.models import AssignReviewerRequest, CurrentUser, Role
@@ -52,6 +52,15 @@ app.add_middleware(
     allow_methods=['*'],
     allow_headers=['*'],
 )
+
+
+
+@app.exception_handler(drive.GoogleNotConnectedError)
+async def _google_not_connected(_request: Request, exc: drive.GoogleNotConnectedError) -> JSONResponse:
+    """Every Drive-backed endpoint (upload, PDF/tree/image downloads) needs the Google OAuth
+    token; without it, say so instead of failing with a bare 500."""
+    return JSONResponse(status_code=503, content={'detail': str(exc)})
+
 
 _worker_stop: asyncio.Event | None = None
 _worker_task: asyncio.Task | None = None

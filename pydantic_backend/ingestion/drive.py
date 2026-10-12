@@ -23,7 +23,17 @@ DRIVE_SCOPES = [
 PARENT_FOLDER_ID = '153OSg8o20lRxEU4sYpipZgochPXj50yL'
 
 
+class GoogleNotConnectedError(RuntimeError):
+    """No Google OAuth token yet — every Drive call needs one (app.py maps this to a 503)."""
+
+
 def _credentials(settings: Settings) -> Credentials:
+    if not settings.gmail_token_path.exists():
+        raise GoogleNotConnectedError(
+            'Google Drive is not connected yet. Desktop app: set GMAIL_CLIENT_ID and '
+            'GMAIL_CLIENT_SECRET in Settings (tray icon), restart, then use "Connect Gmail...". '
+            'Server: run `python -m pydantic_backend.gmail_auth`.'
+        )
     credentials = Credentials.from_authorized_user_file(
         settings.gmail_token_path, DRIVE_SCOPES
     )
