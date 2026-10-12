@@ -7,10 +7,12 @@ import logfire_api as logfire
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel
 from pydantic_ai.exceptions import ModelHTTPError
 
 from .auth.dependencies import get_current_user, get_fast_llm_credentials, get_quality_llm_credentials, invalidate_user_cache, require_admin
 from .auth.models import AssignReviewerRequest, CurrentUser, Role
+from . import model_preference
 from .config import get_settings
 from .db import start_pool, stop_pools
 from .evaluation import assignment_notify, tree_utils
@@ -480,6 +482,27 @@ async def normalization_export(
         media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         headers={'Content-Disposition': f'attachment; filename="{filename}"'},
     )
+
+
+class ReasoningModelUpdate(BaseModel):
+    choice: model_preference.ReasoningChoice
+
+
+@app.get('/settings/reasoning-model')
+async def get_reasoning_model(_user: CurrentUser = Depends(get_current_user)) -> model_preference.ReasoningModelState:
+    """Which model the reasoning tier (compliance matrix, scoring, comparison) uses right now."""
+    return await model_preference.state(get_settings())
+
+
+@app.put('/settings/reasoning-model')
+async def set_reasoning_model(
+    body: ReasoningModelUpdate, _admin: CurrentUser = Depends(require_admin)
+) -> model_preference.ReasoningModelState:
+    """Switch the reasoning tier between Claude, the on-device model, or auto. Takes effect on the
+    next request; previously cached analyses are dropped so they're recomputed by the new model."""
+    settings = get_settings()
+    await model_preference.set_choice(settings, body.choice)
+    return await model_preference.state(settings)
 
 
 @app.get('/normalization/prompts')

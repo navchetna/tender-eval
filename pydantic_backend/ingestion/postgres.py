@@ -123,6 +123,13 @@ CREATE TABLE IF NOT EXISTS llm_result_cache (
   computed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (project_id, version, kind, topic)
 );
+-- Small runtime-editable app preferences (key/value), e.g. which model does the reasoning
+-- tier (see model_preference.py) — changeable from the UI without a restart or redeploy.
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 '''
 
 # Additive migrations for databases created before auth/assignment existed — CREATE TABLE

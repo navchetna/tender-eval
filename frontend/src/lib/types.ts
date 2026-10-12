@@ -187,3 +187,13 @@ export interface DocumentTreeNode {
 export interface DocumentTree {
   root: DocumentTreeNode;
 }
+
+export type ReasoningChoice = "auto" | "claude" | "local";
+
+export interface ReasoningModelState {
+  choice: ReasoningChoice;
+  effective: "claude" | "local";
+  claude_configured: boolean;
+  claude_model: string;
+  local_model: string;
+}

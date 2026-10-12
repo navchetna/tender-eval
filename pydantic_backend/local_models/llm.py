@@ -35,6 +35,9 @@ class _FastLLM:
     def __init__(self) -> None:
         self._pipe = None
         self.device: str | None = None
+        # Second copy on GPU/CPU, loaded only if a request doesn't fit the NPU's static shapes.
+        self._overflow_pipe = None
+        self._overflow_device: str | None = None
         self._load_lock = threading.Lock()
         self._generate_lock = threading.Lock()
         self._structured_output_ok = True
@@ -46,25 +49,18 @@ class _FastLLM:
         with self._load_lock:
             if self._pipe is not None:
                 return self._pipe
-            import openvino_genai as ov_genai
-
             settings = get_settings()
-            path = ensure_model(settings, settings.local_fast_model_repo)
-            errors: list[str] = []
-            for device in device_candidates(settings.local_fast_model_device):
-                config: dict = {'CACHE_DIR': cache_dir(settings)}
-                if device == 'NPU':
-                    config['MAX_PROMPT_LEN'] = settings.local_fast_model_max_prompt_len
-                    config['MIN_RESPONSE_LEN'] = settings.local_fast_model_max_new_tokens
-                try:
-                    with logfire.span('local_models.llm.load', device=device, model=str(path)):
-                        self._pipe = ov_genai.LLMPipeline(str(path), device, **config)
-                    self.device = device
-                    return self._pipe
-                except Exception as exc:  # noqa: BLE001 — try the next device
-                    logfire.warn('local_models.llm.load failed', device=device, error=str(exc))
-                    errors.append(f'{device}: {exc}')
-            raise RuntimeError('Could not load the local LLM on any device: ' + ' | '.join(errors))
+            self._pipe, self.device = _load_pipeline(device_candidates(settings.local_fast_model_device))
+            return self._pipe
+
+    def _load_overflow(self):
+        """The same model on GPU (else CPU), for prompts/outputs larger than the NPU was compiled
+        for — the long scoring/comparison prompts of the reasoning tier, typically. Blocking."""
+        with self._load_lock:
+            if self._overflow_pipe is None:
+                candidates = [d for d in device_candidates('GPU') if d != 'NPU']
+                self._overflow_pipe, self._overflow_device = _load_pipeline(candidates)
+            return self._overflow_pipe
 
     def generate(self, messages: list[dict], json_schema: dict | None, max_new_tokens: int) -> tuple[str, int, int]:
         """Return (text, input_tokens, output_tokens). Blocking."""
@@ -73,6 +69,18 @@ class _FastLLM:
         pipe = self.load()
         with self._generate_lock:
             prompt = pipe.get_tokenizer().apply_chat_template(messages, add_generation_prompt=True)
+            if self.device == 'NPU':
+                settings = get_settings()
+                prompt_tokens = len(pipe.get_tokenizer().encode(prompt).input_ids.data[0])
+                if (
+                    prompt_tokens > settings.local_fast_model_max_prompt_len
+                    or max_new_tokens > settings.local_fast_model_max_new_tokens
+                ):
+                    logfire.info(
+                        'local_models.llm: request exceeds NPU shapes, using overflow device',
+                        prompt_tokens=prompt_tokens, max_new_tokens=max_new_tokens,
+                    )
+                    pipe = self._load_overflow()
             config = pipe.get_generation_config()
             config.max_new_tokens = max_new_tokens
             config.do_sample = False
@@ -94,6 +102,27 @@ class _FastLLM:
                 result = pipe.generate([prompt], config)
             metrics = result.perf_metrics
             return result.texts[0], metrics.get_num_input_tokens(), metrics.get_num_generated_tokens()
+
+
+def _load_pipeline(devices: list[str]):
+    """Download (first run only) and compile the model on the first device that accepts it."""
+    import openvino_genai as ov_genai
+
+    settings = get_settings()
+    path = ensure_model(settings, settings.local_fast_model_repo)
+    errors: list[str] = []
+    for device in devices:
+        config: dict = {'CACHE_DIR': cache_dir(settings)}
+        if device == 'NPU':
+            config['MAX_PROMPT_LEN'] = settings.local_fast_model_max_prompt_len
+            config['MIN_RESPONSE_LEN'] = settings.local_fast_model_max_new_tokens
+        try:
+            with logfire.span('local_models.llm.load', device=device, model=str(path)):
+                return ov_genai.LLMPipeline(str(path), device, **config), device
+        except Exception as exc:  # noqa: BLE001 — try the next device
+            logfire.warn('local_models.llm.load failed', device=device, error=str(exc))
+            errors.append(f'{device}: {exc}')
+    raise RuntimeError('Could not load the local LLM on any device: ' + ' | '.join(errors))
 
 
 _llm = _FastLLM()

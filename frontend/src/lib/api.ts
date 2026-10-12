@@ -14,6 +14,8 @@ import type {
   Project,
   ProjectFileRecord,
   ProjectIn,
+  ReasoningChoice,
+  ReasoningModelState,
   ReviewDecision,
   SectionScoreResult,
   Topic,
@@ -225,3 +227,8 @@ export const reprocessPendingFiles = () => request<unknown[]>("/parsing/process-
 
 export const pollGmail = () => request<unknown[]>("/ingestion/poll-gmail", { method: "POST" });
 export const getGmailStatus = () => request<{ authorized: boolean }>("/ingestion/gmail-status");
+
+export const getReasoningModel = () => request<ReasoningModelState>("/settings/reasoning-model");
+
+export const setReasoningModel = (choice: ReasoningChoice) =>
+  request<ReasoningModelState>("/settings/reasoning-model", { method: "PUT", body: JSON.stringify({ choice }) });

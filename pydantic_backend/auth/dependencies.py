@@ -21,6 +21,7 @@ import bcrypt
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
+from .. import model_preference
 from ..config import get_settings
 from ..db import pool_connection
 from ..llm_credentials import LlmCredentials, fast_llm_credentials, quality_llm_credentials
@@ -87,5 +88,9 @@ async def get_fast_llm_credentials(_user: CurrentUser = Depends(get_current_user
 
 
 async def get_quality_llm_credentials(_user: CurrentUser = Depends(get_current_user)) -> LlmCredentials:
-    """Credentials for judgment calls (compliance/scoring/comparison), routed to the cloud model."""
-    return quality_llm_credentials(get_settings())
+    """Credentials for judgment calls (compliance/scoring/comparison): the cloud model, or the
+    on-device fast model when the admin-selected reasoning model says so (model_preference.py)."""
+    settings = get_settings()
+    if model_preference.resolve(settings, await model_preference.get_choice(settings)) == 'local':
+        return fast_llm_credentials(settings)
+    return quality_llm_credentials(settings)

@@ -11,6 +11,7 @@ import { Empty } from "@/components/ui/Empty";
 import { useToast } from "@/components/ToastProvider";
 import { useAuth } from "@/components/AuthProvider";
 import { DetailTabs } from "@/components/DetailTabs";
+import { ReasoningModelCard } from "@/components/ReasoningModelCard";
 
 type Filter = "all" | "attention" | "inflight" | "done";
 
@@ -126,6 +127,7 @@ export default function OpsPage() {
             </button>
           )}
         </div>
+        <ReasoningModelCard />
         <div className="mb-[14px] flex flex-wrap items-center gap-[6px]">
           {filters.map(([k, l, n]) => (
             <button

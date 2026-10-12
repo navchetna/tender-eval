@@ -22,7 +22,10 @@ _SYSTEM_PROMPT = (
     '"compliant" (fully meets or exceeds it), "partial" (meets it in part, with a gap or '
     'unverified claim), or "non_compliant" (fails to meet it, contradicts it, or is a material '
     'gap). Only judge bidders explicitly given — never invent a bidder. '
-    'For each bidder, give a "summary" (under 8 words, e.g. "SIL-4, cert ref A-220") and a '
+    # No concrete example summary here: the small on-device model (when it's the reasoning model,
+    # see model_preference.py) copies example text verbatim into every verdict.
+    'For each bidder, give a "summary" (under 8 words, stating the key fact from that bidder\'s '
+    'own response) and a '
     '"rationale" (1-2 sentences explaining the judgment, citing the bidder\'s own wording), '
     'with exactly one verdict per bidder given.'
 )

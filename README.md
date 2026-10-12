@@ -100,6 +100,14 @@ once, and the compiled blobs are cached, so later starts load in seconds.
 3. Tray → **Connect Gmail…** runs the one-time Google sign-in (replaces
    `python -m pydantic_backend.gmail_auth`).
 
+**No Claude subscription?** On the **Operations** page, the *Reasoning model* switch picks what
+does the compliance matrix, scoring and final comparison: **Auto** (the default) uses Claude when
+it's configured and the on-device Qwen3-4B otherwise. **Claude** and **On-device** force one or the
+other. Admins can change it at any time without a restart. Switching clears cached analyses, so
+they're recomputed by the new model. On-device reasoning is weaker than Claude, so expect rougher
+rationales. Long scoring/comparison prompts that don't fit the NPU's compiled shapes run on a
+second copy of Qwen on the GPU, which is loaded on first use.
+
 Everything user-writable lives in `%LOCALAPPDATA%\TenderEval`: `config.env`, `pgdata\`,
 `models\`, `ov_cache\`, `logs\`, `.secrets\`. Uninstalling keeps it. Devices are set per model
 in `config.env` (`LOCAL_FAST_MODEL_DEVICE=NPU`, `LOCAL_OCR_MODEL_DEVICE=GPU`). A missing or
