@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { projectHref } from "@/lib/routes";
 import { ArrowLeft, Download, Loader2, Sparkles, Terminal, Upload } from "lucide-react";
 import { ApiError, compareBids, exportMatrix, getDefaultPrompts, getNormalizedView, getProjects } from "@/lib/api";
 import type { ComparisonResult, DefaultPrompts, NormalizedView, Project, Topic } from "@/lib/types";
@@ -430,7 +431,7 @@ export function MatrixView({ projectId }: { projectId: string }) {
   if (error) {
     return (
       <div className="px-[30px] py-[22px]">
-        <Link href={`/projects/${projectId}`} className="btn mb-3 flex items-center gap-[6px] border-none bg-transparent p-0 text-[13px] text-ink-soft">
+        <Link href={projectHref(projectId)} className="btn mb-3 flex items-center gap-[6px] border-none bg-transparent p-0 text-[13px] text-ink-soft">
           <ArrowLeft size={15} />
           Back
         </Link>
@@ -450,7 +451,7 @@ export function MatrixView({ projectId }: { projectId: string }) {
   return (
     <div className="px-[30px] py-[22px]">
       <Link
-        href={`/projects/${projectId}`}
+        href={projectHref(projectId)}
         className="btn mb-3 flex items-center gap-[6px] border-none bg-transparent p-0 text-[13px] text-ink-soft"
       >
         <ArrowLeft size={15} />

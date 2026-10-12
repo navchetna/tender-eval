@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 
-import logfire
+import logfire_api as logfire
 
 from ..config import Settings
 from ..evaluation.models import DocType
@@ -12,13 +12,21 @@ from ..evaluation.service import detect_and_store
 from ..ingestion import drive
 from ..llm_credentials import LlmCredentials
 from .client import ParserClient
+from .local_parser import LocalParserClient
 from .models import ParseArtifacts, ParseOutcome, ParseStatus, PendingFile
 from .repository import ParsingRepository
 
 PARSED_FOLDER_NAME = 'parsed_results'
 
 
-async def _wait_for_terminal(client: ParserClient, task_id: str, settings: Settings) -> tuple[ParseStatus, str | None]:
+def _parser_client(settings: Settings) -> ParserClient | LocalParserClient:
+    """The remote docling service, or the in-process OCR parser for the desktop build."""
+    if settings.model_runtime == 'inprocess':
+        return LocalParserClient(settings)
+    return ParserClient(settings)
+
+
+async def _wait_for_terminal(client: ParserClient | LocalParserClient, task_id: str, settings: Settings) -> tuple[ParseStatus, str | None]:
     """Poll the parser until the task reaches a terminal state or attempts run out."""
     error: str | None = None
     for _ in range(settings.parse_max_poll_attempts):
@@ -30,7 +38,7 @@ async def _wait_for_terminal(client: ParserClient, task_id: str, settings: Setti
 
 
 async def _store_artifacts(
-    settings: Settings, file: PendingFile, client: ParserClient, task_id: str
+    settings: Settings, file: PendingFile, client: ParserClient | LocalParserClient, task_id: str
 ) -> ParseArtifacts:
     """Download parser outputs and upload them into Drive next to the source PDF."""
     parsed_folder_id = await asyncio.to_thread(
@@ -109,7 +117,7 @@ async def process_file(
     file: PendingFile,
     settings: Settings,
     repository: ParsingRepository,
-    client: ParserClient,
+    client: ParserClient | LocalParserClient,
     creds: LlmCredentials,
 ) -> ParseOutcome:
     """Parse one already-claimed (PARSING) file and record the outcome. On success, immediately
@@ -154,7 +162,7 @@ async def retry_file(settings: Settings, file_id: str, creds: LlmCredentials) ->
     file = await repository.claim_file_for_retry(file_id)
     if file is None:
         raise ValueError('File is not in a retryable parse-failed state')
-    async with ParserClient(settings) as client:
+    async with _parser_client(settings) as client:
         return await process_file(file, settings, repository, client, creds)
 
 
@@ -171,6 +179,6 @@ async def process_pending(settings: Settings, creds: LlmCredentials) -> list[Par
     files = await repository.claim_pending_files(settings.parse_batch_size)
     if not files:
         return []
-    async with ParserClient(settings) as client:
+    async with _parser_client(settings) as client:
         outcomes = await asyncio.gather(*(process_file(file, settings, repository, client, creds) for file in files))
     return list(outcomes)

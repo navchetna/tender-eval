@@ -34,6 +34,7 @@ ENV/
 .ENV/
 venv/
 .venv/
+.venv-desktop/
 VENV/
 .VENV/
 env.bak/
@@ -52,6 +53,7 @@ pyenv/
 # PyInstaller
 *.manifest
 *.spec
+!packaging/tender_eval.spec
 
 # Installer logs
 pip-log.txt

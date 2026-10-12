@@ -1,0 +1,22 @@
+# Desktop (.exe) build: the backend's own requirements plus the in-process model runtime,
+# embedded Postgres, tray icon and packager. Windows x64, Python 3.12. See packaging/build.ps1.
+-r requirements.txt
+
+# On-device models, in-process (replaces OVMS + llama.cpp). The pip wheels carry the OpenVINO
+# runtime and its CPU/GPU/NPU plugins — no oneAPI or OpenVINO install on the target machine,
+# only the regular Intel GPU/NPU drivers.
+openvino==2026.4.1
+openvino-genai==2026.4.1.0
+openvino-tokenizers==2026.4.1.0
+huggingface_hub==2.2.0
+
+# In-process PDF parsing (replaces the docling pdf-pipeline service).
+pypdfium2==5.14.0
+pillow==12.3.0
+numpy==2.5.4
+
+# Embedded PostgreSQL 18 (bundled binaries, started/stopped by the app) + tray icon.
+pixeltable-pgserver==0.6.0
+pystray==0.19.5
+
+pyinstaller==6.22.3

@@ -19,7 +19,9 @@ import type {
   Topic,
 } from "./types";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8011";
+// `??`, not `||`: the desktop build sets this to "/api" (same origin as the UI), and an
+// explicitly empty value must not fall back to localhost:8011 either.
+const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8011";
 
 export class ApiError extends Error {
   status: number;

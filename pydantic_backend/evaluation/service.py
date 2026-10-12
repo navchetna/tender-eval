@@ -17,7 +17,7 @@ from __future__ import annotations
 import asyncio
 from collections import defaultdict
 
-import logfire
+import logfire_api as logfire
 
 from ..config import Settings
 from ..ingestion import drive

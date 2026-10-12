@@ -3,7 +3,7 @@ import json
 from datetime import datetime, timezone
 
 import bcrypt
-import logfire
+import logfire_api as logfire
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse

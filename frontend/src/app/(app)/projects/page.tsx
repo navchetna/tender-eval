@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { projectHref } from "@/lib/routes";
 import { Award, Check, ChevronDown, Clock, Mail, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Pill } from "@/components/ui/Pill";
@@ -355,7 +356,7 @@ export default function ProjectsPage() {
       )}
       <div className="grid grid-cols-[repeat(auto-fill,minmax(310px,1fr))] gap-[15px]">
         {summaries?.map(({ project, currentFiles, bidCount, tenderEvals, bidEvals }) => (
-          <Link key={project.project_id} href={`/projects/${project.project_id}`}>
+          <Link key={project.project_id} href={projectHref(project.project_id)}>
             <Card className="lift cursor-pointer p-[17px]">
               <div className="mb-[11px] flex items-center justify-between">
                 <span className="font-mono text-[11px] text-ink-faint">{project.project_code}</span>

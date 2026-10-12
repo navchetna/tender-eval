@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 
-import logfire
+import logfire_api as logfire
 
 from ..config import Settings
 from ..evaluation.repository import bid_repository, tender_repository

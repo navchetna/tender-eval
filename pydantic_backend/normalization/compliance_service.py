@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-import logfire
+import logfire_api as logfire
 
 from ..evaluation.compliance_client import judge_row
 from ..evaluation.models import Topic

@@ -1,7 +1,7 @@
 import re
 from pathlib import PurePosixPath
 
-import logfire
+import logfire_api as logfire
 
 from ..config import Settings
 from .drive import ensure_project_folder, upload_attachment

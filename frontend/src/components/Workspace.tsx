@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
+import { matrixHref } from "@/lib/routes";
 import { ArrowLeft, Award, ExternalLink, FileText, LayoutGrid, Upload, UserPlus, Users, X } from "lucide-react";
 import {
   ApiError,
@@ -537,7 +538,7 @@ export function Workspace({ projectId }: { projectId: string }) {
           )}
           {tenderApproved ? (
             <Link
-              href={`/projects/${projectId}/matrix`}
+              href={matrixHref(projectId)}
               className="btn flex items-center gap-[7px] rounded-[9px] border-[0.5px] border-accent bg-accent px-[15px] py-2 text-[13px] font-medium text-white shadow-[0_2px_8px_-3px_rgba(47,93,138,.5)]"
             >
               <LayoutGrid size={15} />

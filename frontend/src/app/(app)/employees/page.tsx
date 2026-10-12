@@ -3,6 +3,7 @@
 import React, { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { projectHref } from "@/lib/routes";
 import { ChevronDown, ChevronRight, Pencil, Trash2, UserPlus, X } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { Card } from "@/components/ui/Card";
@@ -314,7 +315,7 @@ export default function EmployeesPage() {
                             {w!.projects.map((p) => (
                               <Link
                                 key={p.project_id}
-                                href={`/projects/${p.project_id}`}
+                                href={projectHref(p.project_id)}
                                 className="flex items-center justify-between rounded-md px-2 py-1 text-[12.5px] text-ink hover:bg-surface"
                               >
                                 <span className="flex items-center gap-2">

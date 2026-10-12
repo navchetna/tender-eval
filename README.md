@@ -7,6 +7,13 @@ enterprise/per-employee-key deployment of the same app — the two are intention
 not meant to be merged, so this README (and the rest of this branch) describes only this
 AIPC setup. Checking out `main` gets you that branch's own README instead.
 
+> **`Ervin0307/aipc-exe`: one-click desktop build.** This branch adds a second way to run the
+> same app: a single Windows installer (`TenderEval-Setup.exe`) that needs no oneAPI, OVMS,
+> llama.cpp, Docker, WSL, LiteLLM or PostgreSQL install. The models run **inside the app's own
+> process** through OpenVINO GenAI. See [Desktop app](#desktop-app-single-exe) below. The
+> Docker/WSL deployment in [Installation](#installation) still works unchanged
+> (`MODEL_RUNTIME=litellm` is the default).
+
 ## Problem statement
 
 Large companies run tenders to procure infrastructure. To reduce bias and pick the best bid,
@@ -57,6 +64,78 @@ extraction/matching, not judgment — runs entirely on-device.
 `fast_llm_credentials()` (routed to `npu-qwen3-4b`) backs `detect_sections`, `match_rows`,
 `match_headers`, and `notify_reviewer`; `quality_llm_credentials()` (routed to
 `claude-sonnet-4-5`) backs `judge_row`, `score_section`, and `compare_bids`.
+
+---
+
+## Desktop app (single .exe)
+
+`TenderEval.exe` is one process that hosts what the Docker/WSL deployment spreads across seven
+services:
+
+| Docker/WSL deployment | Desktop build (`MODEL_RUNTIME=inprocess`) |
+|---|---|
+| OVMS serving Qwen3-4B on the NPU | `openvino_genai.LLMPipeline` in-process (`pydantic_backend/local_models/llm.py`), exposed to pydantic-ai as a `FunctionModel`, so every `structured_agent` call site is unchanged. JSON replies use grammar-constrained decoding (`StructuredOutputConfig`). |
+| llama.cpp `llama-server` (SYCL, oneAPI) + LightOnOCR-2 GGUF | `openvino_genai.VLMPipeline` in-process with **LightOnOCR-3-0.8B** (`local_models/ocr.py`). It's the same model family and the same empty-prompt "page → Markdown" contract. LightOnOCR-2's Pixtral architecture isn't supported by OpenVINO GenAI, but LightOnOCR-3-0.8B uses the Qwen3.5-VL architecture, which is. |
+| docling `pdf-pipeline` service + tree-parser | `parsing/local_parser.py`: pypdfium2 render → blank-page filter → OCR → TOC + `output_tree.json` (tree-parser's algorithm, ported without docling/torch). It produces the same artifacts, so detection and normalization are unchanged. |
+| LiteLLM proxy | Gone. The fast tier calls the in-process model, and the quality tier calls Anthropic directly (`ANTHROPIC_API_KEY`). |
+| Postgres container | Embedded PostgreSQL 18 (`pixeltable-pgserver`: bundled binaries, private data dir, random localhost port, started and stopped with the app). |
+| Next.js container | Static export (`NEXT_OUTPUT=export`), served by the backend at `/`, with the API under `/api` on the same origin. |
+| FastAPI container | The same app, run by uvicorn inside the exe (`desktop/launcher.py`). |
+| Logfire tracing | Not bundled. The backend imports `logfire_api`, which forwards to Logfire where it's installed (Docker) and is a no-op in the exe. |
+
+There's no oneAPI on the target machine because the OpenVINO pip wheels already contain the
+runtime and its CPU/GPU/NPU plugins. The target machine needs only the regular Intel Arc/Iris
+GPU and NPU drivers. The models (~2.5 GB Qwen3-4B int4 + ~1.1 GB LightOnOCR-3 int8) download
+from Hugging Face on first run, or during install. They're compiled for that machine's NPU/GPU
+once, and the compiled blobs are cached, so later starts load in seconds.
+
+### Install and use
+
+1. Run `TenderEval-Setup-<version>.exe`. It installs per-user with no admin rights. Leave
+   *"Download and prepare the on-device AI models"* ticked.
+2. Launch **Tender Evaluation**. It lives in the system tray and opens the UI in your browser
+   at `http://127.0.0.1:8011/`. On first launch it opens `config.env`. Fill in
+   `ANTHROPIC_API_KEY`, the Gmail OAuth client (`GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET`), the
+   admin credentials and `REVIEWER_EMAIL`, then restart it from the tray.
+3. Tray → **Connect Gmail…** runs the one-time Google sign-in (replaces
+   `python -m pydantic_backend.gmail_auth`).
+
+Everything user-writable lives in `%LOCALAPPDATA%\TenderEval`: `config.env`, `pgdata\`,
+`models\`, `ov_cache\`, `logs\`, `.secrets\`. Uninstalling keeps it. Devices are set per model
+in `config.env` (`LOCAL_FAST_MODEL_DEVICE=NPU`, `LOCAL_OCR_MODEL_DEVICE=GPU`). A missing or
+failing device falls back to GPU, then CPU.
+
+### Build it
+
+```powershell
+powershell -ExecutionPolicy Bypass -File packaging\build.ps1              # dist\TenderEval\TenderEval.exe
+powershell -ExecutionPolicy Bypass -File packaging\build.ps1 -Installer   # + packaging\installer\Output\TenderEval-Setup-*.exe
+```
+
+You need `uv`, Node.js, and (for `-Installer`) Inno Setup 6, on the build machine only. The
+pieces are `packaging/tender_eval.spec` (PyInstaller, one-folder bundle), its runtime hook
+`packaging/hooks/rthook_dll_dirs.py` (makes OpenVINO's cross-folder DLL dependencies resolvable)
+and `packaging/installer/tender_eval.iss`.
+
+Run from source without packaging (after `uv pip install -r pydantic_backend/requirements-desktop.txt`
+and a static UI build in `frontend/out`):
+
+```powershell
+python -m desktop.launcher          # the app
+python -m desktop.launcher setup    # just download + compile the models
+```
+
+### Converting the OCR model
+
+The app downloads `LOCAL_OCR_MODEL_REPO` (default `ervin0307/LightOnOCR-3-0.8B-int8-ov`), a
+pre-converted OpenVINO IR. To produce it, in a separate venv with
+`optimum-intel[openvino]>=2.2`, `transformers==5.2.*` and CPU torch:
+
+```bash
+optimum-cli export openvino --model lightonai/LightOnOCR-3-0.8B --task image-text-to-text \
+    --weight-format int8 LightOnOCR-3-0.8B-int8-ov
+hf upload ervin0307/LightOnOCR-3-0.8B-int8-ov LightOnOCR-3-0.8B-int8-ov
+```
 
 ---
 

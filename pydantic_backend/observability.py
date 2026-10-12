@@ -1,4 +1,4 @@
-import logfire
+import logfire_api as logfire
 
 from .config import get_settings
 
