@@ -91,14 +91,18 @@ once, and the compiled blobs are cached, so later starts load in seconds.
 
 ### Install and use
 
-1. Run `TenderEval-Setup-<version>.exe`. It installs per-user with no admin rights. Leave
-   *"Download and prepare the on-device AI models"* ticked.
-2. Launch **Tender Evaluation**. It lives in the system tray and opens the UI in your browser
-   at `http://127.0.0.1:8011/`. On first launch it opens `config.env`. Fill in
-   `ANTHROPIC_API_KEY`, the Gmail OAuth client (`GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET`), the
-   admin credentials and `REVIEWER_EMAIL`, then restart it from the tray.
-3. Tray → **Connect Gmail…** runs the one-time Google sign-in (replaces
-   `python -m pydantic_backend.gmail_auth`).
+**End-user guide: [docs/DESKTOP_INSTALL.md](docs/DESKTOP_INSTALL.md)**. It covers installing, every
+setting, Claude vs. on-device reasoning, Google setup and troubleshooting. In short:
+
+1. Run `TenderEval-Setup-<version>.exe`. It installs per-user with no admin rights. The wizard
+   asks for the admin account, an optional Claude key and an optional Google OAuth client, and
+   writes them to `%LOCALAPPDATA%\TenderEval\config.env`. A template of that file is
+   [`desktop/config.env.example`](desktop/config.env.example). The real file holds secrets and
+   is never committed.
+2. Launch **Tender Evaluation**. It runs in the system tray and opens `http://127.0.0.1:8011/`.
+3. Tray → **Connect Gmail…** runs the one-time Google sign-in.
+4. To change settings, use Start menu → **Tender Evaluation settings**, then restart the app
+   (tray → **Quit**, relaunch).
 
 **No Claude subscription?** On the **Operations** page, the *Reasoning model* switch picks what
 does the compliance matrix, scoring and final comparison: **Auto** (the default) uses Claude when

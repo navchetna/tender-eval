@@ -86,7 +86,7 @@ def load_config(home: Path) -> bool:
     config_file = home / 'config.env'
     first_run = not config_file.exists()
     if first_run:
-        shutil.copyfile(bundle_dir() / 'desktop' / 'config.env.template', config_file)
+        shutil.copyfile(bundle_dir() / 'desktop' / 'config.env.example', config_file)
     load_dotenv(config_file, override=False)
 
     defaults = {
@@ -412,8 +412,9 @@ def cmd_run(home: Path, open_browser: bool) -> int:
         subprocess.Popen(['notepad.exe', str(home / 'config.env')])  # noqa: S603, S607
         message_box(
             f'{APP_TITLE} is running (tray icon).\n\n'
-            'First run: fill in your Anthropic API key and Gmail OAuth client in the settings file '
-            'that just opened, then restart the app from the tray icon.\n\n'
+            'First run: set your admin password - and, optionally, Claude and the Gmail OAuth '
+            'client - in the settings file that just opened, then restart the app from the tray '
+            'icon (Quit, then launch it again).\n\n'
             'The on-device models (~3.5 GB) are downloading in the background — the tray menu '
             'shows progress.'
         )

@@ -105,3 +105,5 @@ Thumbs.db
 .secrets/
 
 graphify*
+# Desktop app settings hold real secrets; only desktop/config.env.example is committed.
+config.env

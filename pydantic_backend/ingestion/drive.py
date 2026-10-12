@@ -20,7 +20,9 @@ DRIVE_SCOPES = [
     'https://www.googleapis.com/auth/drive',
 ]
 
-PARENT_FOLDER_ID = '153OSg8o20lRxEU4sYpipZgochPXj50yL'
+# Used when settings.drive_parent_folder_id is empty: a folder in the signed-in account's own My
+# Drive (the desktop default, since another account can't reach the original shared folder).
+DEFAULT_ROOT_FOLDER_NAME = 'Tender Evaluation'
 
 
 class GoogleNotConnectedError(RuntimeError):
@@ -58,6 +60,12 @@ def _version_folder_name(version: int, received_at: 'datetime') -> str:
     return f'Version {version:03d} - {dt_str}'
 
 
+def _parent_folder_id(settings: Settings) -> str:
+    if settings.drive_parent_folder_id:
+        return settings.drive_parent_folder_id
+    return ensure_subfolder(settings, 'root', DEFAULT_ROOT_FOLDER_NAME)
+
+
 def ensure_project_folder(
     settings: Settings,
     project_code: str,
@@ -66,10 +74,10 @@ def ensure_project_folder(
     received_at: 'datetime',
 ) -> tuple[str, str, str]:
     """
-    Find or create a version subfolder under PARENT_FOLDER_ID.
+    Find or create a version subfolder under the configured parent folder (see _parent_folder_id).
 
     Folder structure:
-        <PARENT_FOLDER_ID>/
+        <parent folder>/
             BPCL-2026-001 - Construction of XYZ Pipeline/
                 Version 001 - 2026-07-18 09:30/
                 Version 002 - 2026-07-19 14:05/
@@ -78,13 +86,14 @@ def ensure_project_folder(
         (project_root_folder_id, version_subfolder_id, version_folder_name)
     """
     service = _drive_service(settings)
+    parent_folder_id = _parent_folder_id(settings)
     proj_folder_name = _project_folder_name(project_code, project_name)
     ver_folder_name = _version_folder_name(version, received_at)
 
     # --- find or create project root folder ---
     q = (
         f"name = '{proj_folder_name}' "
-        f"and '{PARENT_FOLDER_ID}' in parents "
+        f"and '{parent_folder_id}' in parents "
         f"and mimeType = 'application/vnd.google-apps.folder' "
         f"and trashed = false"
     )
@@ -97,7 +106,7 @@ def ensure_project_folder(
         meta = {
             'name': proj_folder_name,
             'mimeType': 'application/vnd.google-apps.folder',
-            'parents': [PARENT_FOLDER_ID],
+            'parents': [parent_folder_id],
         }
         project_folder_id = service.files().create(body=meta, fields='id').execute()['id']
 

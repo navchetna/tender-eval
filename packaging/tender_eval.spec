@@ -17,7 +17,7 @@ _ROOT = os.path.dirname(_PACKAGING)
 
 datas = [
     (os.path.join(_ROOT, 'frontend', 'out'), 'frontend'),
-    (os.path.join(_ROOT, 'desktop', 'config.env.template'), 'desktop'),
+    (os.path.join(_ROOT, 'desktop', 'config.env.example'), 'desktop'),
 ]
 binaries = []
 hiddenimports = collect_submodules('pydantic_backend') + collect_submodules('desktop')

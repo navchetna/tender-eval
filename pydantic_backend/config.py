@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     gmail_client_secret: SecretStr
     gmail_token_path: Path = Path('.secrets/gmail-token.json')
     gmail_query: str = 'is:unread has:attachment filename:pdf'
+    # Drive folder that holds every project; empty = a "Tender Evaluation" folder in the signed-in
+    # account's own My Drive (see ingestion/drive.py).
+    drive_parent_folder_id: str = '153OSg8o20lRxEU4sYpipZgochPXj50yL'
     database_url: SecretStr
     logfire_send: bool = False
     logfire_service_name: str = 'tender-repository-ingestion'
