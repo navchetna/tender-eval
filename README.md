@@ -91,6 +91,8 @@ once, and the compiled blobs are cached, so later starts load in seconds.
 
 ### Install and use
 
+**Download: [TenderEval-Setup-0.3.0.exe](https://github.com/navchetna/tender-eval/releases/download/desktop-v0.3.0/TenderEval-Setup-0.3.0.exe)** ([release notes](https://github.com/navchetna/tender-eval/releases/tag/desktop-v0.3.0)).
+
 **End-user guide: [docs/DESKTOP_INSTALL.md](docs/DESKTOP_INSTALL.md)**. It covers installing, every
 setting, Claude vs. on-device reasoning, Google setup and troubleshooting. In short:
 

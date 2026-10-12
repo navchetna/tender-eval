@@ -16,7 +16,8 @@ Docker, WSL, Python, oneAPI or model servers.
 
 ## 1. Install
 
-1. Run **`TenderEval-Setup-<version>.exe`**. No administrator rights are needed; it installs for
+1. Download **[TenderEval-Setup-0.3.0.exe](https://github.com/navchetna/tender-eval/releases/download/desktop-v0.3.0/TenderEval-Setup-0.3.0.exe)** (about 115 MB; newer versions are on the
+   [Releases page](https://github.com/navchetna/tender-eval/releases)) and run it. No administrator rights are needed; it installs for
    your Windows user only.
 2. Work through the wizard:
 
