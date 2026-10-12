@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import logging
 import logging.handlers
 import os
@@ -176,23 +177,40 @@ def start_postgres(home: Path):
     return server
 
 
-async def init_database() -> None:
+async def init_database(home: Path) -> None:
     """Idempotent: CREATE TABLE IF NOT EXISTS + additive migrations, then make sure the
-    configured admin account exists — what `POST /setup/database` does in the Docker setup."""
+    configured admin account exists — what `POST /setup/database` does in the Docker setup.
+
+    Unlike the Docker setup (which never overwrites an existing admin password), on the desktop
+    config.env *is* the control panel: whenever ADMIN_PASSWORD there changes, it's applied to the
+    admin account on the next start. A password changed in the app itself is left alone until
+    config.env's value changes again."""
     import bcrypt
 
     from pydantic_backend.config import get_settings
-    from pydantic_backend.db import stop_pools
+    from pydantic_backend.db import pool_connection, stop_pools
     from pydantic_backend.ingestion.postgres import PostgresRepository
 
     settings = get_settings()
     repository = PostgresRepository(settings)
     try:
         await repository.initialize()
+        email = settings.admin_email
         password = settings.admin_password.get_secret_value()
-        if settings.admin_email and password:
+        if email and password:
             password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-            await repository.ensure_admin(settings.admin_email, password_hash)
+            await repository.ensure_admin(email, password_hash)
+            # Remembers which config value was last applied (a digest, never the password).
+            marker = home / '.admin-password-applied'
+            fingerprint = hashlib.sha256(f'{email}\0{password}'.encode('utf-8')).hexdigest()
+            if not marker.exists() or marker.read_text().strip() != fingerprint:
+                async with pool_connection(settings) as connection:
+                    await connection.execute(
+                        'UPDATE employees SET password_hash = %s WHERE email = %s', (password_hash, email),
+                    )
+                    await connection.commit()
+                marker.write_text(fingerprint)
+                log.info('Applied ADMIN_PASSWORD from config.env to %s', email)
     finally:
         # The pool is bound to this throwaway event loop; uvicorn's loop opens its own.
         await stop_pools()
@@ -201,6 +219,21 @@ async def init_database() -> None:
 # --------------------------------------------------------------------------------------------
 # Web server: API under /api, static UI everywhere else, one origin (so no CORS)
 # --------------------------------------------------------------------------------------------
+
+def _without_basic_challenge(send):
+    """Drop `WWW-Authenticate` from API responses. The UI does its own login form with HTTP Basic
+    credentials, but when it's served from the *same origin* as the API (unlike the Docker setup's
+    separate ports) a 401 carrying that header makes the browser pop its native sign-in dialog
+    over the app on every failed or expired login."""
+
+    async def wrapped(message):
+        if message['type'] == 'http.response.start':
+            headers = [(k, v) for k, v in message.get('headers', []) if k.lower() != b'www-authenticate']
+            message = {**message, 'headers': headers}
+        await send(message)
+
+    return wrapped
+
 
 def build_asgi_app(static_dir: Path):
     from starlette.staticfiles import StaticFiles
@@ -215,7 +248,7 @@ def build_asgi_app(static_dir: Path):
             if path == '/api' or path.startswith('/api/'):
                 inner = path[len('/api'):] or '/'
                 scope = {**scope, 'path': inner, 'raw_path': inner.encode('utf-8')}
-                await backend(scope, receive, send)
+                await backend(scope, receive, _without_basic_challenge(send))
                 return
             await static(scope, receive, send)
             return
@@ -359,7 +392,7 @@ def cmd_run(home: Path, open_browser: bool) -> int:
 
     try:
         start_postgres(home)
-        asyncio.run(init_database(), loop_factory=asyncio.SelectorEventLoop)  # see ServerThread.run
+        asyncio.run(init_database(home), loop_factory=asyncio.SelectorEventLoop)  # see ServerThread.run
     except Exception as exc:  # noqa: BLE001
         log.exception('Database startup failed')
         message_box(f'Could not start the local database: {exc}\n\nSee {home / "logs"}.', error=True)
